@@ -11,10 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import settings
 from .api.v1.agent import router as agent_router
+from .api.v1.approvals import router as approval_router
 from .api.v1.auth import router as auth_router
+from .api.v1.github_webhooks import router as github_webhooks_router
 from .api.v1.integrations import router as integration_router
+from .api.v1.meetings import router as meeting_router
+from .api.v1.members import router as members_router
 from .api.v1.memory import router as memory_router
+from .api.v1.payments import router as payments_router
+from .api.v1.settings import router as settings_router
 from .api.v1.slack import router as slack_router
+from .api.v1.tasks import router as tasks_router
 from .api.v1.workspaces import router as workspace_router
 from .db.base import Base
 from .db.session import engine
@@ -25,9 +32,15 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         import app.models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
+
+    # Start the proactive agent scheduler — runs check-in cycles so the
+    # agent acts without a user prompt.
+    from .services.pm_scheduler import start_scheduler, stop_scheduler
+    await start_scheduler()
     try:
         yield
     finally:
+        await stop_scheduler()
         await engine.dispose()
 
 
@@ -56,3 +69,10 @@ app.include_router(integration_router, prefix="/api/v1")
 app.include_router(memory_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")
 app.include_router(slack_router, prefix="/api/v1")
+app.include_router(tasks_router, prefix="/api/v1")
+app.include_router(approval_router, prefix="/api/v1")
+app.include_router(meeting_router, prefix="/api/v1")
+app.include_router(members_router, prefix="/api/v1")
+app.include_router(payments_router, prefix="/api/v1")
+app.include_router(settings_router, prefix="/api/v1")
+app.include_router(github_webhooks_router, prefix="/api/v1")
