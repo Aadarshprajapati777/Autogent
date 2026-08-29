@@ -1,63 +1,69 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme inline {
+  --color-canvas: #09090b;
+  --color-panel: #121216;
+  --color-line: #28282e;
+  --color-mint: #75e0bd;
+  --color-ink: #f5f4f8;
+}
 
 * {
-    border-color: #28282e;
+  border-color: var(--color-line);
 }
 
 body {
-    background: #09090b;
-    color: #f5f4f8;
-    font-feature-settings: "ss01" 1, "cv02" 1;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-feature-settings: "ss01" 1, "cv02" 1;
 }
 
 ::selection {
-    background: #75e0bd;
-    color: #09090b;
+  background: var(--color-mint);
+  color: var(--color-canvas);
 }
 
 .grid-bg {
-    background-image: linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px);
-    background-size: 36px 36px;
+  background-image: linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px);
+  background-size: 36px 36px;
 }
 
 @keyframes toast-in {
-    from { opacity: 0; transform: translateY(8px) scale(0.97); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes dialog-overlay-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes dialog-panel-in {
-    from { opacity: 0; transform: scale(0.96) translateY(8px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 @keyframes skeleton-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .animate-dialog-overlay {
-    animation: dialog-overlay-in 180ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation: dialog-overlay-in 180ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
 .animate-dialog-panel {
-    animation: dialog-panel-in 220ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  animation: dialog-panel-in 220ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
 .skeleton {
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
