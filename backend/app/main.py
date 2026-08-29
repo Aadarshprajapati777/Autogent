@@ -10,6 +10,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import settings
+from .api.v1.agent import router as agent_router
+from .api.v1.auth import router as auth_router
+from .api.v1.integrations import router as integration_router
+from .api.v1.memory import router as memory_router
+from .api.v1.slack import router as slack_router
+from .api.v1.workspaces import router as workspace_router
 from .db.base import Base
 from .db.session import engine
 
@@ -42,3 +48,11 @@ app.add_middleware(
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "service": "autogent-api"}
+
+
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(workspace_router, prefix="/api/v1")
+app.include_router(integration_router, prefix="/api/v1")
+app.include_router(memory_router, prefix="/api/v1")
+app.include_router(agent_router, prefix="/api/v1")
+app.include_router(slack_router, prefix="/api/v1")
