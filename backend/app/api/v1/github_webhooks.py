@@ -20,7 +20,9 @@ log = logging.getLogger(__name__)
 
 def _verify(payload: bytes, signature: str) -> bool:
     if not settings.github_webhook_secret:
-        return True  # dev mode
+        if settings.is_production:
+            return False
+        return True  # dev mode only
     expected = "sha256=" + hmac.new(
         settings.github_webhook_secret.encode(), payload, hashlib.sha256
     ).hexdigest()

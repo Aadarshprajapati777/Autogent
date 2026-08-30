@@ -121,7 +121,7 @@ async def recall_webhook(
 ) -> Response:
     body = await request.body()
 
-    # Svix signature verification (skipped in dev mode)
+    # Svix signature verification — required in production, optional in dev
     if settings.recall_svix_webhook_secret and svix_signature:
         try:
             from svix.webhooks import Webhook
@@ -136,9 +136,9 @@ async def recall_webhook(
             )
         except Exception as exc:
             raise HTTPException(401, f"Invalid Svix signature: {exc}")
-        payload = json.loads(body) if body else {}
-    else:
-        payload = json.loads(body) if body else {}
+    elif settings.is_production and not settings.recall_svix_webhook_secret:
+        raise HTTPException(401, "Recall webhook secret not configured")
+    payload = json.loads(body) if body else {}
 
     event_type = payload.get("event") or payload.get("type") or ""
     data = payload.get("data") or payload.get("payload") or {}
