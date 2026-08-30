@@ -4,7 +4,7 @@ import datetime
 import jwt
 import bcrypt
 from pydantic import BaseModel, EmailStr, Field
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,31 @@ from ...db.session import get_session
 from ...models.core import MemberRole, Organization, User, Workspace, WorkspaceMember
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+# In-process rate limit counters (per IP). For multi-instance deployments,
+# replace with Redis-backed limiter.
+_auth_attempts: dict[str, list[float]] = {}
+_RATE_WINDOW_SEC = 60.0
+_RATE_MAX_AUTH = 10  # login/signup/forgot per minute per IP
+
+
+def _check_auth_rate_limit(request: Request) -> None:
+    import time
+    ip = _client_ip(request)
+    now = time.time()
+    recent = [t for t in _auth_attempts.get(ip, []) if now - t < _RATE_WINDOW_SEC]
+    if len(recent) >= _RATE_MAX_AUTH:
+        raise HTTPException(429, "Too many auth attempts. Try again later.")
+    recent.append(now)
+    _auth_attempts[ip] = recent
 
 
 def _hash_password(password: str) -> str:
@@ -110,8 +135,10 @@ async def _user_with_workspaces(session: AsyncSession, user: User) -> dict:
 @router.post("/signup")
 async def signup(
     body: SignupRequest,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    _check_auth_rate_limit(request)
     existing = (
         await session.execute(select(User).where(User.email == body.email))
     ).scalar_one_or_none()
@@ -136,8 +163,10 @@ async def signup(
 @router.post("/login")
 async def login(
     body: LoginRequest,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    _check_auth_rate_limit(request)
     user = (
         await session.execute(select(User).where(User.email == body.email))
     ).scalar_one_or_none()
@@ -154,8 +183,10 @@ async def login(
 @router.post("/forgot-password")
 async def forgot_password(
     body: ForgotPasswordRequest,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    _check_auth_rate_limit(request)
     user = (
         await session.execute(select(User).where(User.email == body.email))
     ).scalar_one_or_none()
@@ -182,7 +213,15 @@ async def forgot_password(
             logging.exception("Failed to send password reset email")
             raise HTTPException(500, "Failed to send reset email. Please try again.")
         return {"sent": True}
-    return {"sent": True, "reset_token": reset_token, "dev_mode": True}
+    # In dev without SMTP, log the reset link. Never return the token in
+    # the API response — that's an account-takeover vector.
+    if not settings.is_production:
+        import logging
+        logging.getLogger(__name__).info(
+            "Password reset requested for %s (no SMTP configured). "
+            "Reset link: %s", user.email, reset_link,
+        )
+    return {"sent": True}
 
 
 @router.post("/reset-password")
