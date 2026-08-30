@@ -2,10 +2,11 @@
 generation on demand."""
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.deps import current_user
+from ...api.pagination import pagination_params
 from ...db.session import get_session
 from ...models.core import User, WorkspaceMember
 from ...models.operations import Insight, WeeklyReport
@@ -29,16 +30,20 @@ async def list_reports(
     workspace_id: uuid.UUID = Query(...),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination_params),
 ) -> dict:
     await _check_member(workspace_id, user, session)
+    base_query = select(WeeklyReport).where(WeeklyReport.workspace_id == workspace_id)
+    total = await session.scalar(select(func.count()).select_from(base_query.subquery()))
     reports = (await session.execute(
-        select(WeeklyReport)
-        .where(WeeklyReport.workspace_id == workspace_id)
-        .order_by(desc(WeeklyReport.period_start))
-        .limit(20)
+        base_query.order_by(desc(WeeklyReport.period_start)).offset(page["skip"]).limit(page["limit"])
     )).scalars().all()
     return {
         "count": len(reports),
+        "total": total,
+        "skip": page["skip"],
+        "limit": page["limit"],
+        "has_more": (page["skip"] + len(reports)) < (total or 0),
         "reports": [
             {
                 "id": str(r.id),

@@ -3,13 +3,14 @@ the agent's tasks_create tool, but the dashboard needs to list and update
 them directly too.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.deps import current_user
+from ...api.pagination import pagination_params
 from ...db.session import get_session
 from ...models.core import User, WorkspaceMember
 from ...models.work import Task, TaskComment, TaskState
@@ -34,19 +35,27 @@ async def list_tasks(
     state: str | None = Query(None),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination_params),
 ) -> dict:
     await _check_member(workspace_id, user, session)
-    stmt = (
-        select(Task)
-        .where(Task.workspace_id == workspace_id)
-        .order_by(desc(Task.created_at))
-        .limit(100)
-    )
+    base = select(Task).where(Task.workspace_id == workspace_id)
     if state:
-        stmt = stmt.where(Task.state == TaskState(state))
+        try:
+            state_enum = TaskState(state)
+        except ValueError:
+            raise HTTPException(422, f"Invalid state: {state}")
+        base = base.where(Task.state == state_enum)
+    total = await session.scalar(
+        select(func.count()).select_from(base.subquery())
+    )
+    stmt = base.order_by(desc(Task.created_at)).offset(page["skip"]).limit(page["limit"])
     tasks = (await session.execute(stmt)).scalars().all()
     return {
         "count": len(tasks),
+        "total": total,
+        "skip": page["skip"],
+        "limit": page["limit"],
+        "has_more": (page["skip"] + len(tasks)) < (total or 0),
         "tasks": [
             {
                 "id": str(t.id),
@@ -96,7 +105,7 @@ async def get_task(
 
 
 class TaskStateUpdate(BaseModel):
-    state: str
+    state: TaskState
     workspace_id: uuid.UUID
 
 
@@ -113,8 +122,8 @@ async def update_task_state(
     )
     if not task:
         raise HTTPException(404, "Task not found")
-    task.state = TaskState(body.state)
-    task.last_activity_at = datetime.utcnow()
+    task.state = body.state
+    task.last_activity_at = datetime.now(UTC)
     await session.commit()
     return {"id": str(task.id), "state": task.state.value}
 

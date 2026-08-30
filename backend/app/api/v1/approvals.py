@@ -4,10 +4,11 @@ approve, edit, or reject them. Approved candidates become real tasks.
 import uuid
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.deps import current_user
+from ...api.pagination import pagination_params
 from ...db.session import get_session
 from ...models.core import User, WorkspaceMember
 from ...models.work import CandidateState, TaskCandidate
@@ -34,19 +35,21 @@ async def list_candidates(
     state: str | None = Query(None),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination_params),
 ) -> dict:
     await _check_member(workspace_id, user, session)
-    stmt = (
-        select(TaskCandidate)
-        .where(TaskCandidate.workspace_id == workspace_id)
-        .order_by(desc(TaskCandidate.created_at))
-        .limit(100)
-    )
+    base_query = select(TaskCandidate).where(TaskCandidate.workspace_id == workspace_id)
     if state:
-        stmt = stmt.where(TaskCandidate.state == CandidateState(state))
+        base_query = base_query.where(TaskCandidate.state == CandidateState(state))
+    total = await session.scalar(select(func.count()).select_from(base_query.subquery()))
+    stmt = base_query.order_by(desc(TaskCandidate.created_at)).offset(page["skip"]).limit(page["limit"])
     candidates = (await session.execute(stmt)).scalars().all()
     return {
         "count": len(candidates),
+        "total": total,
+        "skip": page["skip"],
+        "limit": page["limit"],
+        "has_more": (page["skip"] + len(candidates)) < (total or 0),
         "candidates": [
             {
                 "id": str(c.id),

@@ -6,10 +6,11 @@ import uuid
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.deps import current_user
+from ...api.pagination import pagination_params
 from ...config import settings
 from ...db.session import get_session
 from ...models.core import User, WorkspaceMember
@@ -34,16 +35,20 @@ async def list_meetings(
     workspace_id: uuid.UUID = Query(...),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination_params),
 ) -> dict:
     await _check_member(workspace_id, user, session)
+    base_query = select(Meeting).where(Meeting.workspace_id == workspace_id)
+    total = await session.scalar(select(func.count()).select_from(base_query.subquery()))
     meetings = (await session.execute(
-        select(Meeting)
-        .where(Meeting.workspace_id == workspace_id)
-        .order_by(desc(Meeting.created_at))
-        .limit(100)
+        base_query.order_by(desc(Meeting.created_at)).offset(page["skip"]).limit(page["limit"])
     )).scalars().all()
     return {
         "count": len(meetings),
+        "total": total,
+        "skip": page["skip"],
+        "limit": page["limit"],
+        "has_more": (page["skip"] + len(meetings)) < (total or 0),
         "meetings": [
             {
                 "id": str(m.id),

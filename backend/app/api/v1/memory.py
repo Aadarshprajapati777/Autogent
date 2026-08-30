@@ -8,6 +8,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.deps import current_user, require_workspace_access
+from ...api.pagination import pagination_params
 from ...db.session import get_session
 from ...models.core import User, WorkspaceMember
 from ...models.memory import Fact, FactKind, Person, Project, TemporalStatus
@@ -36,21 +37,25 @@ async def list_facts(
     workspace_id: uuid.UUID = Query(...),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination_params),
 ) -> dict:
     await _check_member(workspace_id, user, session)
+    base = select(Fact).where(
+        Fact.workspace_id == workspace_id,
+        Fact.temporal_status == TemporalStatus.CURRENT,
+    )
+    total = await session.scalar(select(func.count()).select_from(base.subquery()))
     facts = (
         await session.execute(
-            select(Fact)
-            .where(
-                Fact.workspace_id == workspace_id,
-                Fact.temporal_status == TemporalStatus.CURRENT,
-            )
-            .order_by(desc(Fact.created_at))
-            .limit(100)
+            base.order_by(desc(Fact.created_at)).offset(page["skip"]).limit(page["limit"])
         )
     ).scalars().all()
     return {
         "count": len(facts),
+        "total": total,
+        "skip": page["skip"],
+        "limit": page["limit"],
+        "has_more": (page["skip"] + len(facts)) < (total or 0),
         "facts": [
             {
                 "fact_id": f.fact_id,
@@ -74,15 +79,22 @@ async def list_people(
     workspace_id: uuid.UUID = Query(...),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination_params),
 ) -> dict:
     await _check_member(workspace_id, user, session)
+    base = select(Person).where(Person.workspace_id == workspace_id)
+    total = await session.scalar(select(func.count()).select_from(base.subquery()))
     people = (
         await session.execute(
-            select(Person).where(Person.workspace_id == workspace_id)
+            base.offset(page["skip"]).limit(page["limit"])
         )
     ).scalars().all()
     return {
         "count": len(people),
+        "total": total,
+        "skip": page["skip"],
+        "limit": page["limit"],
+        "has_more": (page["skip"] + len(people)) < (total or 0),
         "people": [
             {
                 "person_id": str(p.id),
@@ -153,15 +165,22 @@ async def list_projects(
     workspace_id: uuid.UUID = Query(...),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination_params),
 ) -> dict:
     await _check_member(workspace_id, user, session)
+    base = select(Project).where(Project.workspace_id == workspace_id)
+    total = await session.scalar(select(func.count()).select_from(base.subquery()))
     projects = (
         await session.execute(
-            select(Project).where(Project.workspace_id == workspace_id)
+            base.offset(page["skip"]).limit(page["limit"])
         )
     ).scalars().all()
     return {
         "count": len(projects),
+        "total": total,
+        "skip": page["skip"],
+        "limit": page["limit"],
+        "has_more": (page["skip"] + len(projects)) < (total or 0),
         "projects": [
             {
                 "project_id": str(p.id),
