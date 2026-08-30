@@ -10,6 +10,7 @@ import enum, uuid
 from datetime import datetime
 from sqlalchemy import Enum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import Mapped, mapped_column
 from ..db.base import Base, Timestamped, UUIDPrimaryKey
 
@@ -115,8 +116,14 @@ class Fact(UUIDPrimaryKey, Timestamped, Base):
     valid_until: Mapped[datetime | None] = mapped_column(nullable=True)
     superseded_by: Mapped[str | None] = mapped_column(String(64))
     confidence: Mapped[float] = mapped_column(Float, default=0.5, nullable=False)
+    # pgvector column for semantic search. 384-dim from BAAI/bge-small-en-v1.5.
+    # Nullable so existing rows don't break; backfilled as facts are re-stored.
+    embedding: Mapped[list | None] = mapped_column(Vector(384), nullable=True)
     __table_args__ = (
-        UniqueConstraint("workspace_id", "fact_id"),
+        # fact_id is deterministic, but we keep multiple versions (current +
+        # superseded) so the unique constraint is on (workspace_id, fact_id,
+        # temporal_status) instead of just (workspace_id, fact_id).
+        UniqueConstraint("workspace_id", "fact_id", "temporal_status"),
         Index("ix_memory_facts_subject", "workspace_id", "subject"),
         Index("ix_memory_facts_project_kind", "workspace_id", "project", "fact_kind"),
     )

@@ -22,3 +22,6 @@ openpyxl==3.1.5
 alembic==1.16.4
 bcrypt==4.2.1
 email-validator==2.3.0
+svix==1.59.2
+pgvector==0.3.6
+fastembed==0.8.0
