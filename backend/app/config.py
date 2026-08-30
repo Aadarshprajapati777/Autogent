@@ -1,4 +1,10 @@
+"""Application settings. Secrets are loaded from environment variables and
+validated at startup — no insecure defaults are shipped. The app refuses to
+start in production mode if required secrets are missing.
+"""
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 
 class Settings(BaseSettings):
@@ -9,15 +15,17 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     frontend_url: str = "http://localhost:3000"
     backend_url: str = "http://localhost:8000"
+    environment: str = "development"  # development | staging | production
+    log_level: str = "INFO"
 
     # ── auth ──
     clerk_issuer: str = ""
     clerk_audience: str = ""
     clerk_jwks_url: str = ""
     clerk_secret_key: str = ""
-    jwt_secret_key: str = "autogent-dev-secret-change-in-production"
+    jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
-    jwt_expiry_hours: int = 72
+    jwt_expiry_hours: int = 24
 
     # ── credentials vault ──
     credential_encryption_key: str = ""
@@ -52,7 +60,7 @@ class Settings(BaseSettings):
     recall_api_key: str = ""
     recall_region: str = "us-east-1"
     recall_workspace_verification_secret: str = ""
-    recall_svix_webhook_secret: str | None = None
+    recall_svix_webhook_secret: str = ""
 
     # ── email ──
     smtp_host: str = ""
@@ -72,6 +80,38 @@ class Settings(BaseSettings):
     monitoring_hour_utc: int = 3
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
+
+    @model_validator(mode="after")
+    def _validate_production_secrets(self):
+        """In production, refuse to start without required secrets."""
+        if not self.is_production:
+            return self
+        required = [
+            ("jwt_secret_key", self.jwt_secret_key, "JWT secret key"),
+            ("credential_encryption_key", self.credential_encryption_key, "Credential encryption key"),
+            ("database_url", self.database_url, "Database URL"),
+        ]
+        missing = [label for _, val, label in required if not val or val.startswith("autogent-dev")]
+        if missing:
+            raise ValueError(
+                f"Missing required production secrets: {', '.join(missing)}. "
+                "Set them via environment variables before starting the server."
+            )
+        if len(self.jwt_secret_key) < 32:
+            raise ValueError("jwt_secret_key must be at least 32 characters in production")
+        return self
+
+    @field_validator("environment")
+    @classmethod
+    def _valid_env(cls, v: str) -> str:
+        v = v.lower().strip()
+        if v not in ("development", "staging", "production"):
+            raise ValueError("environment must be development, staging, or production")
+        return v
 
 
 settings = Settings()
