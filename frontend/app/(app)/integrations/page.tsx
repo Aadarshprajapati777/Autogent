@@ -51,10 +51,10 @@ export default function IntegrationsPage() {
     }
   };
 
-  const disconnect = async (id: string) => {
+  const disconnect = async (provider: string) => {
     if (!confirm("Disconnect this integration?")) return;
     try {
-      await api(`/integrations/${id}/disconnect`, { method: "POST" });
+      await api(`/integrations/${provider}?workspace_id=${workspace.id}`, { method: "DELETE" });
       load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to disconnect");
@@ -93,7 +93,7 @@ export default function IntegrationsPage() {
                 </div>
                 {isConnected ? (
                   <button
-                    onClick={() => disconnect(integration!.id)}
+                    onClick={() => disconnect(integration!.provider)}
                     className="rounded-lg border border-line px-4 py-2 text-sm text-zinc-400 transition hover:border-rose-500/50 hover:text-rose-400"
                   >
                     Disconnect

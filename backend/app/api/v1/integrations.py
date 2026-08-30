@@ -108,7 +108,8 @@ async def oauth_connect(
         raise HTTPException(400, f"{provider} OAuth is not configured on the server")
 
     state_token = secrets.token_urlsafe(32)
-    redirect_uri = f"{settings.frontend_url.rstrip('/')}/api/v1/integrations/{provider}/callback"
+    # OAuth callbacks must hit the backend, not the frontend.
+    redirect_uri = f"{settings.backend_url.rstrip('/')}/api/v1/integrations/{provider}/callback"
     state = OAuthState(
         provider=IntegrationProvider(provider),
         workspace_id=workspace_id,
