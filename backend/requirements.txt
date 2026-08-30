@@ -7,7 +7,6 @@ pydantic==2.13.4
 pydantic-settings==2.10.1
 python-dotenv==1.2.2
 redis==5.2.1
-celery==5.5.3
 httpx==0.28.1
 cryptography==45.0.6
 PyJWT==2.10.1
@@ -17,11 +16,10 @@ python-dateutil==2.9.0.post0
 openai==1.99.9
 cerebras_cloud_sdk==1.91.0
 razorpay==1.4.2
-weasyprint==66.0
-openpyxl==3.1.5
 alembic==1.16.4
 bcrypt==4.2.1
 email-validator==2.3.0
 svix==1.59.2
 pgvector==0.3.6
 fastembed==0.8.0
+slowapi==0.1.9
