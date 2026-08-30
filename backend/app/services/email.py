@@ -34,3 +34,7 @@ def send_password_reset_email(to: str, name: str, reset_link: str) -> None:
         to, "Reset your Autogent password",
         f"Hi {name},\n\nReset your password: {reset_link}\n\nThis link expires in 1 hour.",
     )
+
+
+def send_email(to: str, subject: str, body: str) -> None:
+    _send(to, subject, body)
