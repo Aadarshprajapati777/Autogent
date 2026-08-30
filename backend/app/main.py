@@ -19,6 +19,8 @@ from .api.v1.meetings import router as meeting_router
 from .api.v1.members import router as members_router
 from .api.v1.memory import router as memory_router
 from .api.v1.payments import router as payments_router
+from .api.v1.recall_webhooks import router as recall_webhooks_router
+from .api.v1.reports import router as reports_router
 from .api.v1.settings import router as settings_router
 from .api.v1.slack import router as slack_router
 from .api.v1.tasks import router as tasks_router
@@ -76,3 +78,5 @@ app.include_router(members_router, prefix="/api/v1")
 app.include_router(payments_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(github_webhooks_router, prefix="/api/v1")
+app.include_router(recall_webhooks_router, prefix="/api/v1")
+app.include_router(reports_router, prefix="/api/v1")
