@@ -3,8 +3,9 @@ the agent's answer plus the trace of tool calls it made. Conversation history
 is persisted per workspace + user so each thread is continuous.
 """
 import uuid
+import time
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,20 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 # Import the tools package so all tools register on first request.
 import app.tools  # noqa: F401, E402
+
+# Per-user agent rate limit: 20 messages / minute
+_agent_rate: dict[uuid.UUID, list[float]] = {}
+_AGENT_RATE_MAX = 20
+_AGENT_RATE_WINDOW = 60.0
+
+
+def _check_agent_rate(user_id: uuid.UUID) -> None:
+    now = time.time()
+    recent = [t for t in _agent_rate.get(user_id, []) if now - t < _AGENT_RATE_WINDOW]
+    if len(recent) >= _AGENT_RATE_MAX:
+        raise HTTPException(429, "Too many agent requests. Please slow down.")
+    recent.append(now)
+    _agent_rate[user_id] = recent
 
 
 class AgentRequest(BaseModel):
@@ -62,6 +77,7 @@ async def agent_chat(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AgentResponse:
+    _check_agent_rate(user.id)
     # Capture user_id up front — the session may expire the user object
     # during the agent loop (tool calls flush/rollback the session).
     user_id = user.id
