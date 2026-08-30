@@ -82,6 +82,31 @@ async def _bootstrap_workspace(session: AsyncSession, user: User) -> Workspace:
     return ws
 
 
+async def _user_with_workspaces(session: AsyncSession, user: User) -> dict:
+    """Build the user response dict including their workspaces."""
+    rows = (
+        await session.execute(
+            select(Workspace, WorkspaceMember)
+            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+            .where(WorkspaceMember.user_id == user.id)
+        )
+    ).all()
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "name": user.display_name,
+        "workspaces": [
+            {
+                "id": str(workspace.id),
+                "name": workspace.name,
+                "slug": workspace.slug,
+                "role": member.role.value,
+            }
+            for workspace, member in rows
+        ],
+    }
+
+
 @router.post("/signup")
 async def signup(
     body: SignupRequest,
@@ -105,10 +130,7 @@ async def signup(
     await session.commit()
 
     token = _create_jwt(user.id)
-    return {
-        "token": token,
-        "user": {"id": str(user.id), "email": user.email, "name": user.display_name},
-    }
+    return {"token": token, "user": await _user_with_workspaces(session, user)}
 
 
 @router.post("/login")
@@ -126,10 +148,7 @@ async def login(
     if not user.is_login_enabled or not user.is_active:
         raise HTTPException(403, "Account is disabled")
     token = _create_jwt(user.id)
-    return {
-        "token": token,
-        "user": {"id": str(user.id), "email": user.email, "name": user.display_name},
-    }
+    return {"token": token, "user": await _user_with_workspaces(session, user)}
 
 
 @router.post("/forgot-password")
