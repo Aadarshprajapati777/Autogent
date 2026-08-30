@@ -24,11 +24,19 @@ async def generate_weekly_report(session: AsyncSession, workspace_id) -> WeeklyR
         select(Task).where(Task.workspace_id == workspace_id)
     )).all()
 
-    shipped = [t for t in all_tasks if t.state == TaskState.COMPLETED and t.last_activity_at and t.last_activity_at >= week_ago]
-    slipped = [t for t in all_tasks if t.state != TaskState.COMPLETED and t.due_at and t.due_at < now]
+    def _aware(dt):
+        """Make a datetime timezone-aware (UTC) if it isn't already."""
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=UTC)
+        return dt
+
+    shipped = [t for t in all_tasks if t.state == TaskState.COMPLETED and t.last_activity_at and _aware(t.last_activity_at) >= week_ago]
+    slipped = [t for t in all_tasks if t.state != TaskState.COMPLETED and t.due_at and _aware(t.due_at) < now]
     in_progress = [t for t in all_tasks if t.state == TaskState.IN_PROGRESS]
     blocked = [t for t in all_tasks if t.state == TaskState.BLOCKED]
-    overdue = [t for t in all_tasks if t.state == TaskState.OVERDUE or (t.due_at and t.due_at < now and t.state not in (TaskState.COMPLETED, TaskState.CANCELLED))]
+    overdue = [t for t in all_tasks if t.state == TaskState.OVERDUE or (t.due_at and _aware(t.due_at) < now and t.state not in (TaskState.COMPLETED, TaskState.CANCELLED))]
 
     # Low-score tasks need attention
     needs_attention = sorted(

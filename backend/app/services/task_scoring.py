@@ -21,8 +21,8 @@ from ..models.work import Task, TaskComment, TaskState
 def _activity_score(last_activity: datetime | None, now: datetime) -> float:
     if not last_activity:
         return 5.0
-    days = (now - last_activity.replace(tzinfo=UTC) if last_activity.tzinfo is None
-            else now - last_activity).days
+    aware = last_activity.replace(tzinfo=UTC) if last_activity.tzinfo is None else last_activity
+    days = (now - aware).days
     if days <= 0:
         return 30.0
     if days <= 1:
