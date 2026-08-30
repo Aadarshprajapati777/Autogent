@@ -8,10 +8,23 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..agent.registry import tool
+from ..models.memory import Person
 from ..models.work import Task, TaskComment, TaskState
+
+
+async def _resolve_owner(ctx, owner_name: str | None) -> uuid.UUID | None:
+    if not owner_name:
+        return None
+    person = await ctx.db.scalar(
+        select(Person).where(
+            Person.workspace_id == ctx.workspace_id,
+            func.lower(Person.name) == owner_name.lower(),
+        )
+    )
+    return person.user_id if person and person.user_id else None
 
 
 @tool(
@@ -41,6 +54,8 @@ async def tasks_create(ctx, args: dict) -> dict:
         priority=args.get("priority", 3),
         state=TaskState.OPEN,
     )
+    if args.get("owner_name"):
+        task.owner_id = await _resolve_owner(ctx, args["owner_name"])
     if args.get("due_at"):
         try:
             task.due_at = datetime.fromisoformat(args["due_at"])
@@ -48,7 +63,7 @@ async def tasks_create(ctx, args: dict) -> dict:
             pass
     ctx.db.add(task)
     await ctx.db.flush()
-    return {"task_id": str(task.id), "title": task.title, "state": task.state.value}
+    return {"task_id": str(task.id), "title": task.title, "state": task.state.value, "owner_id": str(task.owner_id) if task.owner_id else None}
 
 
 @tool(

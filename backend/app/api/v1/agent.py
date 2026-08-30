@@ -62,13 +62,17 @@ async def agent_chat(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AgentResponse:
+    # Capture user_id up front — the session may expire the user object
+    # during the agent loop (tool calls flush/rollback the session).
+    user_id = user.id
+
     # Verify membership by loading the user's chat history in this workspace.
     history = (
         await session.execute(
             select(PmChatMessage)
             .where(
                 PmChatMessage.workspace_id == body.workspace_id,
-                PmChatMessage.user_id == user.id,
+                PmChatMessage.user_id == user_id,
             )
             .order_by(PmChatMessage.created_at.asc())
             .limit(50)
@@ -79,14 +83,14 @@ async def agent_chat(
     session.add(
         PmChatMessage(
             workspace_id=body.workspace_id,
-            user_id=user.id,
+            user_id=user_id,
             role="user",
             text=body.message,
         )
     )
     await session.flush()
 
-    ctx = ToolContext(db=session, workspace_id=body.workspace_id, user_id=user.id)
+    ctx = ToolContext(db=session, workspace_id=body.workspace_id, user_id=user_id)
     messages = _to_llm_messages(history, body.message)
     run = await agent.run(messages, ctx)
 
@@ -94,7 +98,7 @@ async def agent_chat(
     session.add(
         PmChatMessage(
             workspace_id=body.workspace_id,
-            user_id=user.id,
+            user_id=user_id,
             role="assistant",
             text=run.answer,
             actions=run.actions(),
