@@ -66,18 +66,31 @@ async def memory_add_fact(ctx, args: dict) -> dict:
     fid = _fact_id(args["subject"], args["predicate"], args["value"], topics)
     now = datetime.now(timezone.utc)
 
-    # Supersede any current fact with the same id.
-    existing = await ctx.db.scalars(
+    # fact_id is deterministic (UUID5), so the same (subject, predicate, value,
+    # topics) always maps to the same id. If a row already exists, update it
+    # in place instead of inserting a duplicate (which would violate the
+    # unique constraint on workspace_id + fact_id).
+    existing = await ctx.db.scalar(
         select(Fact).where(
             Fact.workspace_id == ctx.workspace_id,
             Fact.fact_id == fid,
-            Fact.temporal_status == TemporalStatus.CURRENT,
         )
     )
-    for old in existing:
-        old.temporal_status = TemporalStatus.SUPERSEDED
-        old.valid_until = now
-        old.superseded_by = fid
+    if existing:
+        existing.subject = args["subject"]
+        existing.predicate = args["predicate"]
+        existing.value = args["value"]
+        existing.fact_kind = FactKind(args.get("fact_kind", "fact"))
+        existing.topics = topics
+        existing.project = args.get("project")
+        existing.speaker = args.get("speaker")
+        existing.evidence_quote = args.get("evidence_quote")
+        existing.temporal_status = TemporalStatus.CURRENT
+        existing.valid_from = now
+        existing.valid_until = None
+        existing.superseded_by = None
+        await ctx.db.flush()
+        return {"fact_id": fid, "stored": True, "updated": True}
 
     fact = Fact(
         workspace_id=ctx.workspace_id,

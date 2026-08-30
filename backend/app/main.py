@@ -9,7 +9,7 @@ if sys.platform == "win32":
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from ..config import settings
+from .config import settings
 from .api.v1.agent import router as agent_router
 from .api.v1.approvals import router as approval_router
 from .api.v1.auth import router as auth_router

@@ -82,7 +82,9 @@ class LLMClient:
                         }
                         for tc in (choice.message.tool_calls or [])
                     ],
-                    "finish_reason": choice.finish_reason,
+                    # finish_reason is kept separately — Cerebras rejects it
+                    # if it ends up in the messages array on the next turn.
+                    "_finish_reason": choice.finish_reason,
                 }
             except (APIError, asyncio.TimeoutError) as exc:
                 last_error = exc

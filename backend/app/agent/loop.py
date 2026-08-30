@@ -114,7 +114,10 @@ class Agent:
                 return run
 
             step = AgentStep(message=assistant)
-            messages.append(assistant)
+            # Strip internal fields before appending to messages so the LLM
+            # only sees valid message properties (role, content, tool_calls).
+            clean = {k: v for k, v in assistant.items() if not k.startswith("_")}
+            messages.append(clean)
             tool_calls = assistant.get("tool_calls") or []
 
             if not tool_calls:
@@ -150,6 +153,9 @@ class Agent:
                     result = {"tool_call_id": tc.get("id"), "content": content}
                 except Exception as exc:  # noqa: BLE001 — tools surface errors to the LLM
                     log.exception("tool %s failed", name)
+                    # Rollback the session so it's usable for subsequent tools
+                    # and the final commit. The error is surfaced to the LLM.
+                    await ctx.db.rollback()
                     content = f"tool error: {exc}"
                     result = {"tool_call_id": tc.get("id"), "error": str(exc), "content": content}
 

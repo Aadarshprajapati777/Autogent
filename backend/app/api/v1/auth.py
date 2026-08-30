@@ -66,19 +66,19 @@ class ProfileUpdate(BaseModel):
     notification_preferences: dict | None = None
 
 
-def _bootstrap_workspace(session: AsyncSession, user: User) -> Workspace:
+async def _bootstrap_workspace(session: AsyncSession, user: User) -> Workspace:
     stem = re.sub(r"[^a-z0-9]+", "-", user.display_name.lower()).strip("-") or "workspace"
     slug = f"{stem}-{str(user.id)[:8]}"
     org = Organization(name=f"{user.display_name}'s organization", slug=slug)
     session.add(org)
-    session.flush()
+    await session.flush()
     ws = Workspace(organization_id=org.id, name="Main workspace", slug="main")
     session.add(ws)
-    session.flush()
+    await session.flush()
     session.add(
         WorkspaceMember(workspace_id=ws.id, user_id=user.id, role=MemberRole.OWNER)
     )
-    session.flush()
+    await session.flush()
     return ws
 
 
@@ -101,7 +101,7 @@ async def signup(
     )
     session.add(user)
     await session.flush()
-    _bootstrap_workspace(session, user)
+    await _bootstrap_workspace(session, user)
     await session.commit()
 
     token = _create_jwt(user.id)
@@ -251,7 +251,7 @@ async def bootstrap(
         )
     ).scalar_one_or_none()
     if not membership:
-        _bootstrap_workspace(session, user)
+        await _bootstrap_workspace(session, user)
         await session.commit()
     return {"user_id": str(user.id), "onboarding_required": False}
 
