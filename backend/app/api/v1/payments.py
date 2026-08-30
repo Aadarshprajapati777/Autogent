@@ -2,10 +2,12 @@
 import uuid
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.deps import current_user
+from ...api.pagination import pagination_params
+from ...config import settings
 from ...db.session import get_session
 from ...models.core import User, WorkspaceMember
 from ...models.payment import Payment, PaymentOrder
@@ -30,13 +32,13 @@ async def _check_member(workspace_id: uuid.UUID, user: User, session: AsyncSessi
 class CreateOrderRequest(BaseModel):
     workspace_id: uuid.UUID
     amount: int = Field(ge=1, description="Amount in paise (INR) or cents")
-    currency: str = "INR"
+    currency: str = Field(default="INR", min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
     description: str | None = None
 
 
 @router.get("/config")
-async def payments_config() -> dict:
-    return {"configured": is_configured(), "currency": "INR"}
+async def payments_config(user: User = Depends(current_user)) -> dict:
+    return {"configured": is_configured(), "currency": settings.razorpay_currency}
 
 
 @router.post("/orders")
@@ -127,13 +129,20 @@ async def list_payments(
     workspace_id: uuid.UUID = Query(...),
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
+    page: dict = Depends(pagination_params),
 ) -> dict:
     await _check_member(workspace_id, user, session)
+    base_query = select(Payment).where(Payment.workspace_id == workspace_id)
+    total = await session.scalar(select(func.count()).select_from(base_query.subquery()))
     payments = (await session.execute(
-        select(Payment).where(Payment.workspace_id == workspace_id)
+        base_query.offset(page["skip"]).limit(page["limit"])
     )).scalars().all()
     return {
         "count": len(payments),
+        "total": total,
+        "skip": page["skip"],
+        "limit": page["limit"],
+        "has_more": (page["skip"] + len(payments)) < (total or 0),
         "payments": [
             {
                 "id": str(p.id),
