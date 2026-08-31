@@ -241,6 +241,28 @@ async def api_pm_decision(
     payload["query"] = body.query
     payload["audience"] = body.audience
     payload["elapsed_ms"] = elapsed
+
+    # Store decision in history for outcome tracking
+    try:
+        from ...services.decision_history import store_decision
+        from ...services.actions import store_actions
+        decision_id = await store_decision(session, body.workspace_id, {
+            "query": body.query,
+            "audience": body.audience,
+            "response_text": payload.get("response_text", ""),
+            "reasoning": payload.get("reasoning", ""),
+            "risk_level": payload.get("risk_level", "medium"),
+            "confidence": payload.get("confidence", 0.5),
+            "suggested_actions": payload.get("suggested_actions", []),
+        })
+        payload["decision_id"] = decision_id
+        # Queue suggested actions for execution
+        actions = payload.get("suggested_actions", [])
+        if actions:
+            await store_actions(session, body.workspace_id, actions)
+    except Exception:
+        pass  # Don't fail the decision if history storage fails
+
     return payload
 
 

@@ -132,7 +132,25 @@ async def _run_once() -> None:
         except Exception as exc:
             logger.warning("State inference failed for %s: %s", workspace_id, exc)
 
-    # 5. Rescore tasks for all workspaces
+    # 5. Monitor cycle — detect overdue commitments, silent engineers,
+    #    single-points-of-failure, stale blockers. Escalate stale alerts.
+    for workspace_id in slack_workspaces:
+        try:
+            async with SessionLocal() as session:
+                from .monitor import run_monitor_cycle, escalate_stale_alerts
+                monitor_result = await run_monitor_cycle(session, workspace_id)
+                if monitor_result.get("alerts_generated", 0) > 0:
+                    logger.info("Monitor: %d alerts in workspace %s",
+                                monitor_result["alerts_generated"], workspace_id)
+                esc_result = await escalate_stale_alerts(session, workspace_id)
+                if esc_result.get("escalated_count", 0) > 0:
+                    logger.info("Escalated %d stale alerts in workspace %s",
+                                esc_result["escalated_count"], workspace_id)
+                await session.commit()
+        except Exception as exc:
+            logger.warning("Monitor cycle failed for %s: %s", workspace_id, exc)
+
+    # 6. Rescore tasks for all workspaces
     try:
         from ..services.task_scoring import rescore_workspace_tasks
         async with SessionLocal() as session:
@@ -148,14 +166,14 @@ async def _run_once() -> None:
     except Exception as exc:
         logger.warning("Task scoring cycle failed: %s", exc)
 
-    # 6. Run escalation evaluation
+    # 7. Run escalation evaluation
     try:
         from ..services.escalation_engine import run_escalation_cycle
         await run_escalation_cycle()
     except Exception as exc:
         logger.warning("Escalation cycle failed: %s", exc)
 
-    # 7. Generate weekly reports (check if it's a new week)
+    # 8. Generate weekly reports (check if it's a new week)
     try:
         from ..services.weekly_report import generate_weekly_report
         async with SessionLocal() as session:

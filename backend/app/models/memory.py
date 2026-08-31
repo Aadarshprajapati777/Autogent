@@ -302,3 +302,122 @@ class CheckInRecord(UUIDPrimaryKey, Timestamped, Base):
     __table_args__ = (
         Index("ix_checkin_person", "workspace_id", "person_name"),
     )
+
+
+class Alert(UUIDPrimaryKey, Timestamped, Base):
+    """Autonomous risk alert — overdue commitments, engineer silence,
+    single-point-of-failure, stale blockers. Deduped by signature."""
+    __tablename__ = "memory_alerts"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    alert_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    alert_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    subject: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    project: Mapped[str | None] = mapped_column(String(200), index=True)
+    person: Mapped[str | None] = mapped_column(String(200))
+    severity: Mapped[str] = mapped_column(String(20), default="medium", nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_fact_id: Mapped[str | None] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)
+    escalation_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    escalated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    __table_args__ = (
+        Index("ix_alerts_status", "workspace_id", "status"),
+        Index("ix_alerts_type", "workspace_id", "alert_type"),
+    )
+
+
+class Sprint(UUIDPrimaryKey, Timestamped, Base):
+    """A timeboxed sprint for a project."""
+    __tablename__ = "memory_sprints"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sprint_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    project: Mapped[str] = mapped_column(String(200), nullable=False)
+    goal: Mapped[str] = mapped_column(Text, nullable=False)
+    start_date: Mapped[datetime] = mapped_column(nullable=False)
+    end_date: Mapped[datetime] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="planning", nullable=False)
+    task_ids: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    __table_args__ = (
+        Index("ix_sprints_project", "workspace_id", "project"),
+    )
+
+
+class Milestone(UUIDPrimaryKey, Timestamped, Base):
+    """A project milestone with a target date."""
+    __tablename__ = "memory_milestones"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    milestone_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    project: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    target_date: Mapped[str] = mapped_column(String(32), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="upcoming", nullable=False)
+    __table_args__ = (
+        Index("ix_milestones_project", "workspace_id", "project"),
+    )
+
+
+class Spend(UUIDPrimaryKey, Timestamped, Base):
+    """A spend record against a project budget."""
+    __tablename__ = "memory_spends"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    spend_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    project: Mapped[str] = mapped_column(String(200), nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="USD", nullable=False)
+    category: Mapped[str] = mapped_column(String(100), default="general", nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    __table_args__ = (
+        Index("ix_spends_project", "workspace_id", "project"),
+    )
+
+
+class DecisionHistory(UUIDPrimaryKey, Timestamped, Base):
+    """Every PM decision stored durably so the system can learn from past
+    outcomes and reference them in future reasoning."""
+    __tablename__ = "memory_decision_history"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    decision_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    audience: Mapped[str] = mapped_column(String(40), default="founder_non_technical", nullable=False)
+    response_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    risk_level: Mapped[str] = mapped_column(String(20), default="medium", nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, default=0.5, nullable=False)
+    suggested_actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    outcome: Mapped[str | None] = mapped_column(String(20))
+    outcome_notes: Mapped[str | None] = mapped_column(Text)
+    outcome_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    __table_args__ = (
+        Index("ix_decisions_workspace", "workspace_id", "created_at"),
+    )
+
+
+class ActionQueue(UUIDPrimaryKey, Timestamped, Base):
+    """Durable queue for PM-suggested actions. The backend fetches and
+    executes them (Slack pings, escalations) and marks them complete."""
+    __tablename__ = "memory_action_queue"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    action_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    action: Mapped[str] = mapped_column(String(60), nullable=False)
+    target: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    urgency: Mapped[str] = mapped_column(String(20), default="low", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    __table_args__ = (
+        Index("ix_actions_status", "workspace_id", "status"),
+    )

@@ -30,6 +30,7 @@ from .api.v1.members import router as members_router
 from .api.v1.memory import router as memory_router
 from .api.v1.payments import router as payments_router
 from .api.v1.pm import router as pm_router
+from .api.v1.pm_advanced import router as pm_advanced_router
 from .api.v1.recall_webhooks import router as recall_webhooks_router
 from .api.v1.reports import router as reports_router
 from .api.v1.settings import router as settings_router
@@ -170,3 +171,4 @@ app.include_router(github_webhooks_router, prefix="/api/v1")
 app.include_router(recall_webhooks_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
 app.include_router(pm_router, prefix="/api/v1")
+app.include_router(pm_advanced_router, prefix="/api/v1")
