@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { Sparkles } from "lucide-react";
 
@@ -85,6 +86,16 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           >
             {loading ? "Please wait..." : mode === "signup" ? "Sign up" : "Sign in"}
           </button>
+          {mode === "login" && (
+            <div className="text-center">
+              <Link
+                href="/forgot-password"
+                className="text-sm text-zinc-500 transition hover:text-mint"
+              >
+                Forgot your password?
+              </Link>
+            </div>
+          )}
         </form>
         <p className="text-center text-sm text-zinc-500">
           {mode === "signup" ? (

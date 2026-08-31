@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   Bell,
   CalendarDays,
   CheckSquare,
   ChevronDown,
-  CreditCard,
   LayoutDashboard,
   Link2,
   LogOut,
@@ -28,13 +28,13 @@ import { useAuth } from "@/components/auth-provider";
 const links = [
   ["Overview", "/dashboard", LayoutDashboard],
   ["Agent", "/agent", MessageSquare],
+  ["Analytics", "/analytics", BarChart3],
   ["Meetings", "/meetings", CalendarDays],
   ["Tasks", "/tasks", CheckSquare],
   ["Approvals", "/approvals", ShieldCheck],
   ["People", "/people", Users],
   ["Memory", "/memory", Sparkles],
   ["Integrations", "/integrations", Link2],
-  ["Payments", "/payments", CreditCard],
   ["Settings", "/settings", Settings],
 ] as const;
 

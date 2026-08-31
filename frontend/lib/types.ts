@@ -31,8 +31,14 @@ export interface Person {
   role: string;
   title: string | null;
   skills: string[];
+  languages?: string[];
   is_technical: boolean;
+  experience_years?: number | null;
+  availability_hours_per_week?: number | null;
   timezone: string | null;
+  interests?: string[];
+  career_goals?: string | null;
+  resume_summary?: string | null;
 }
 
 export interface Task {
@@ -66,9 +72,55 @@ export interface AgentResponse {
 }
 
 export interface Integration {
-  id: string;
+  id: string | null;
   provider: string;
   state: string;
   external_account_id: string | null;
   last_synced_at: string | null;
+  managed?: boolean;
+  config?: Record<string, unknown>;
+}
+
+export interface IntegrationResource {
+  id: string;
+  name: string;
+  type?: string;
+  key?: string;
+  default_branch?: string;
+  num_members?: number;
+  url?: string;
+}
+
+export interface Meeting {
+  id: string;
+  title: string | null;
+  provider: string;
+  status: string;
+  scheduled_at: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface TranscriptChunk {
+  id: string;
+  speaker: string;
+  text: string;
+  started_ms: number | null;
+  ended_ms: number | null;
+}
+
+export interface MeetingExtraction {
+  status: string | null;
+  summary: string | null;
+  confidence: number | null;
+  decisions: { title: string; rationale: string | null; confidence: number }[];
+  tasks: {
+    ref: string;
+    title: string;
+    description: string | null;
+    owner_name: string | null;
+    state: string;
+    confidence: number;
+    due_at: string | null;
+  }[];
 }
