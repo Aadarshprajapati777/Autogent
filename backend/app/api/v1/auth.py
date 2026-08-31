@@ -204,7 +204,7 @@ async def forgot_password(
         algorithm=settings.jwt_algorithm,
     )
     reset_link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={reset_token}"
-    if settings.smtp_host:
+    if settings.email_enabled and settings.smtp_host:
         from ...services.email import send_password_reset_email
         try:
             send_password_reset_email(user.email, user.display_name, reset_link)
@@ -213,12 +213,12 @@ async def forgot_password(
             logging.exception("Failed to send password reset email")
             raise HTTPException(500, "Failed to send reset email. Please try again.")
         return {"sent": True}
-    # In dev without SMTP, log the reset link. Never return the token in
-    # the API response — that's an account-takeover vector.
+    # In dev without email enabled, log the reset link. Never return the
+    # token in the API response — that's an account-takeover vector.
     if not settings.is_production:
         import logging
         logging.getLogger(__name__).info(
-            "Password reset requested for %s (no SMTP configured). "
+            "Password reset requested for %s (email not enabled). "
             "Reset link: %s", user.email, reset_link,
         )
     return {"sent": True}

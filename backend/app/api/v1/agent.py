@@ -16,6 +16,15 @@ from ...db.session import get_session
 from ...models.core import User
 from ...models.pm_chat import PmChatMessage
 
+# ADK integration — used when USE_ADK_AGENT=true and AI_PROVIDER=gemini.
+try:
+    from ...agent.adk_agent import is_adk_available, run_adk_agent
+    _ADK_ENABLED = is_adk_available()
+except Exception as _adk_err:  # noqa: BLE001
+    import logging as _logging
+    _logging.getLogger(__name__).warning("ADK not available: %s", _adk_err)
+    _ADK_ENABLED = False
+
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 # Import the tools package so all tools register on first request.
@@ -108,21 +117,27 @@ async def agent_chat(
 
     ctx = ToolContext(db=session, workspace_id=body.workspace_id, user_id=user_id)
     messages = _to_llm_messages(history, body.message)
-    run = await agent.run(messages, ctx)
+
+    if _ADK_ENABLED:
+        run = await run_adk_agent(messages, ctx)
+    else:
+        run = await agent.run(messages, ctx)
 
     # Persist the agent's reply + its action trace.
+    # ADK runs store actions directly; the custom loop computes them from steps.
+    run_actions = getattr(run, "_adk_actions", None) or run.actions()
     session.add(
         PmChatMessage(
             workspace_id=body.workspace_id,
             user_id=user_id,
             role="assistant",
             text=run.answer,
-            actions=run.actions(),
+            actions=run_actions,
         )
     )
     await session.commit()
 
-    return AgentResponse(answer=run.answer, actions=run.actions(), error=run.error)
+    return AgentResponse(answer=run.answer, actions=run_actions, error=run.error)
 
 
 @router.get("/history")

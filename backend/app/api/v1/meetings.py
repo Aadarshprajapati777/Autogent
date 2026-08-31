@@ -14,7 +14,11 @@ from ...api.pagination import pagination_params
 from ...config import settings
 from ...db.session import get_session
 from ...models.core import User, WorkspaceMember
-from ...models.meetings import Meeting, MeetingExtraction, MeetingProvider, MeetingStatus, Transcript
+from ...models.meetings import (
+    Meeting, MeetingExtraction, MeetingProvider, MeetingStatus,
+    Speaker, Transcript, TranscriptChunk,
+)
+from ...models.work import CandidateState, Decision, TaskCandidate
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
@@ -152,4 +156,107 @@ async def get_meeting(
             }
             if extraction else None
         ),
+    }
+
+
+@router.get("/{meeting_id}/transcript")
+async def get_meeting_transcript(
+    meeting_id: uuid.UUID,
+    workspace_id: uuid.UUID = Query(...),
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Get the full transcript with speaker info for a meeting."""
+    await _check_member(workspace_id, user, session)
+    meeting = await session.scalar(
+        select(Meeting).where(Meeting.workspace_id == workspace_id, Meeting.id == meeting_id)
+    )
+    if not meeting:
+        raise HTTPException(404, "Meeting not found")
+    transcript = await session.scalar(
+        select(Transcript).where(Transcript.meeting_id == meeting.id)
+    )
+    if not transcript:
+        return {"chunks": [], "speakers": [], "status": None}
+
+    speakers = (await session.scalars(
+        select(Speaker).where(Speaker.meeting_id == meeting.id)
+    )).all()
+    speaker_map = {str(s.id): s.display_name for s in speakers}
+
+    chunks = (await session.scalars(
+        select(TranscriptChunk)
+        .where(TranscriptChunk.transcript_id == transcript.id, TranscriptChunk.is_final.is_(True))
+        .order_by(TranscriptChunk.sequence)
+    )).all()
+
+    return {
+        "status": transcript.status,
+        "speakers": [{"id": str(s.id), "name": s.display_name} for s in speakers],
+        "chunks": [
+            {
+                "id": str(c.id),
+                "speaker": speaker_map.get(str(c.speaker_id), "Unknown") if c.speaker_id else "Unknown",
+                "text": c.text,
+                "started_ms": c.started_ms,
+                "ended_ms": c.ended_ms,
+            }
+            for c in chunks
+        ],
+    }
+
+
+@router.get("/{meeting_id}/extraction")
+async def get_meeting_extraction(
+    meeting_id: uuid.UUID,
+    workspace_id: uuid.UUID = Query(...),
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Get the extraction results (decisions, tasks, risks) for a meeting."""
+    await _check_member(workspace_id, user, session)
+    meeting = await session.scalar(
+        select(Meeting).where(Meeting.workspace_id == workspace_id, Meeting.id == meeting_id)
+    )
+    if not meeting:
+        raise HTTPException(404, "Meeting not found")
+    transcript = await session.scalar(
+        select(Transcript).where(Transcript.meeting_id == meeting.id)
+    )
+    if not transcript:
+        return {"status": None, "summary": None, "decisions": [], "tasks": [], "risks": []}
+
+    extraction = await session.scalar(
+        select(MeetingExtraction).where(MeetingExtraction.transcript_id == transcript.id)
+    )
+    if not extraction:
+        return {"status": None, "summary": None, "decisions": [], "tasks": [], "risks": []}
+
+    decisions = (await session.scalars(
+        select(Decision).where(Decision.meeting_id == meeting.id)
+    )).all()
+    task_candidates = (await session.scalars(
+        select(TaskCandidate).where(TaskCandidate.extraction_id == extraction.id)
+    )).all()
+
+    return {
+        "status": extraction.status,
+        "summary": extraction.summary,
+        "confidence": extraction.confidence,
+        "decisions": [
+            {"title": d.title, "rationale": d.rationale, "confidence": d.confidence}
+            for d in decisions
+        ],
+        "tasks": [
+            {
+                "ref": t.ref,
+                "title": t.title,
+                "description": t.description,
+                "owner_name": t.owner_name,
+                "state": t.state.value if t.state else "pending",
+                "confidence": t.confidence,
+                "due_at": t.due_at.isoformat() if t.due_at else None,
+            }
+            for t in task_candidates
+        ],
     }
