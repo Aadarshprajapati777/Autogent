@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/components/workspace-provider";
-import { ShieldCheck } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ShieldCheck, Check, X, User, Calendar, Gauge } from "lucide-react";
+import { PageHeader, EmptyState, Skeleton, Badge, Card, ProgressBar } from "@/components/ui";
 
 interface Candidate {
   id: string;
@@ -59,85 +59,106 @@ export default function ApprovalsPage() {
     }
   };
 
-  const stateColors: Record<string, string> = {
-    pending: "bg-amber-500/15 text-amber-400",
-    auto_approved: "bg-mint/15 text-mint",
-    materialized: "bg-mint/15 text-mint",
-    rejected: "bg-rose-500/15 text-rose-400",
-    edited: "bg-blue-500/15 text-blue-400",
+  const stateColors: Record<string, "amber" | "mint" | "rose" | "blue"> = {
+    pending: "amber",
+    auto_approved: "mint",
+    materialized: "mint",
+    rejected: "rose",
+    edited: "blue",
   };
+
+  const confidenceColor = (c: number) =>
+    c >= 0.8 ? "mint" : c >= 0.5 ? "amber" : "rose";
 
   return (
     <div className="p-6 lg:p-8">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-5 w-5 text-mint" />
-        <h1 className="text-2xl font-bold">Approvals</h1>
-      </div>
-      <p className="mt-1 text-sm text-zinc-500">
-        Task candidates extracted from meetings. Review and approve them.
-      </p>
+      <PageHeader
+        icon={ShieldCheck}
+        title="Approvals"
+        subtitle="Task candidates extracted from meetings — review and approve them"
+      />
 
-      <div className="mt-6 space-y-3">
-        {loading ? (
-          <div className="skeleton h-24 rounded-xl bg-white/5" />
-        ) : candidates.length === 0 ? (
-          <div className="rounded-xl border border-line bg-panel p-8 text-center">
-            <p className="text-sm text-zinc-600">No pending approvals</p>
-          </div>
-        ) : (
-          candidates.map((c) => (
-            <div
-              key={c.id}
-              className="rounded-xl border border-line bg-panel p-5"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-zinc-600">{c.ref}</span>
-                    <span
-                      className={cn(
-                        "rounded-md px-2 py-0.5 text-xs font-medium",
-                        stateColors[c.state] ?? "bg-zinc-500/15 text-zinc-400",
-                      )}
-                    >
-                      {c.state.replace("_", " ")}
-                    </span>
-                  </div>
-                  <p className="mt-2 font-medium">{c.title}</p>
-                  {c.description && (
-                    <p className="mt-1 text-sm text-zinc-500">{c.description}</p>
-                  )}
-                  <div className="mt-2 flex gap-4 text-xs text-zinc-600">
-                    {c.owner_name && <span>Owner: {c.owner_name}</span>}
-                    {c.due_at && (
-                      <span>Due: {new Date(c.due_at).toLocaleDateString()}</span>
-                    )}
-                    <span>Confidence: {Math.round(c.confidence * 100)}%</span>
-                  </div>
-                </div>
-                {c.state === "pending" && (
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      onClick={() => review(c.id, "approve")}
-                      disabled={acting === c.id}
-                      className="rounded-lg bg-mint px-3 py-1.5 text-sm font-medium text-canvas transition hover:brightness-110 disabled:opacity-50"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => review(c.id, "reject")}
-                      disabled={acting === c.id}
-                      className="rounded-lg border border-line px-3 py-1.5 text-sm text-zinc-400 transition hover:border-rose-500/50 hover:text-rose-400 disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-                  </div>
+      {loading ? (
+        <div className="mt-6 space-y-3">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
+      ) : candidates.length === 0 ? (
+        <div className="mt-6">
+          <EmptyState
+            icon={ShieldCheck}
+            title="No pending approvals"
+            description="When the agent extracts tasks from meetings, they'll appear here for your review."
+          />
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {candidates.map((c) => (
+            <Card key={c.id} className="flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs text-zinc-600">{c.ref}</span>
+                <Badge color={stateColors[c.state] ?? "zinc"}>
+                  {c.state.replace("_", " ")}
+                </Badge>
+              </div>
+
+              {/* Title + description */}
+              <p className="mt-3 font-medium leading-snug">{c.title}</p>
+              {c.description && (
+                <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">{c.description}</p>
+              )}
+
+              {/* Meta */}
+              <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-600">
+                {c.owner_name && (
+                  <span className="flex items-center gap-1">
+                    <User size={12} /> {c.owner_name}
+                  </span>
+                )}
+                {c.due_at && (
+                  <span className="flex items-center gap-1">
+                    <Calendar size={12} /> {new Date(c.due_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </span>
                 )}
               </div>
-            </div>
-          ))
-        )}
-      </div>
+
+              {/* Confidence */}
+              <div className="mt-4">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-xs text-zinc-500">
+                    <Gauge size={12} /> Confidence
+                  </span>
+                  <span className="text-xs font-medium text-zinc-400">
+                    {Math.round(c.confidence * 100)}%
+                  </span>
+                </div>
+                <ProgressBar value={c.confidence} color={confidenceColor(c.confidence)} />
+              </div>
+
+              {/* Actions */}
+              {c.state === "pending" && (
+                <div className="mt-4 flex gap-2 border-t border-line pt-4">
+                  <button
+                    onClick={() => review(c.id, "approve")}
+                    disabled={acting === c.id}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-mint px-3 py-2 text-sm font-medium text-canvas transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    <Check size={16} /> Approve
+                  </button>
+                  <button
+                    onClick={() => review(c.id, "reject")}
+                    disabled={acting === c.id}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm text-zinc-400 transition hover:border-rose-500/50 hover:text-rose-400 disabled:opacity-50"
+                  >
+                    <X size={16} /> Reject
+                  </button>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/components/workspace-provider";
 import type { ChatMessage, AgentResponse, ActionTrace } from "@/lib/types";
-import { Send, Sparkles, Wrench } from "lucide-react";
+import { Send, Sparkles, Wrench, ChevronDown, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AgentPage() {
@@ -27,7 +27,7 @@ export default function AgentPage() {
   }, [workspace]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   if (!workspace) return null;
@@ -58,43 +58,78 @@ export default function AgentPage() {
     }
   };
 
+  const suggestions = [
+    "Check in with the team on Slack",
+    "What do you know about the API project?",
+    "Create a task for the auth refactor",
+    "Who's working on what right now?",
+  ];
+
   return (
     <div className="flex h-[calc(100vh-70px)] flex-col">
+      {/* Header */}
       <div className="border-b border-line px-6 py-4 lg:px-8">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-mint" />
-          <h1 className="text-lg font-semibold">Agent</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-mint/10">
+              <Sparkles className="h-5 w-5 text-mint" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold">Agent</h1>
+              <p className="text-xs text-zinc-500">Powered by Gemini 3.5 Flash + Google ADK</p>
+            </div>
+          </div>
         </div>
-        <p className="mt-0.5 text-sm text-zinc-500">
-          Ask the agent to do work — it calls tools to act.
-        </p>
       </div>
 
+      {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 lg:px-8">
-        <div className="mx-auto max-w-2xl space-y-4">
+        <div className="mx-auto max-w-2xl space-y-6">
           {historyLoading ? (
-            <div className="skeleton h-20 rounded-lg bg-white/5" />
+            <div className="space-y-4">
+              <div className="skeleton h-16 rounded-2xl bg-white/5" />
+              <div className="skeleton h-24 rounded-2xl bg-white/5" />
+            </div>
           ) : messages.length === 0 ? (
-            <div className="rounded-xl border border-line bg-panel p-6 text-center">
-              <Sparkles className="mx-auto h-8 w-8 text-mint" />
-              <p className="mt-3 font-medium">Start a conversation</p>
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="grid h-16 w-16 place-items-center rounded-2xl bg-mint/10">
+                <Sparkles className="h-8 w-8 text-mint" />
+              </div>
+              <p className="mt-4 text-lg font-semibold">Start a conversation</p>
               <p className="mt-1 text-sm text-zinc-500">
-                Try: &ldquo;Check in with the team on Slack&rdquo; or &ldquo;What do you know about
-                the API project?&rdquo;
+                The agent uses tools to take real action — not just chat.
               </p>
+              <div className="mt-6 flex flex-wrap justify-center gap-2">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setInput(s)}
+                    className="rounded-full border border-line bg-panel px-3.5 py-1.5 text-xs text-zinc-400 transition hover:border-mint/30 hover:text-mint"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)
           )}
           {loading && (
             <div className="flex gap-3">
-              <div className="skeleton h-8 w-8 shrink-0 rounded-full bg-mint/20" />
-              <div className="skeleton h-12 flex-1 rounded-lg bg-white/5" />
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mint/20">
+                <Loader2 size={16} className="animate-spin text-mint" />
+              </div>
+              <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-line bg-panel px-4 py-3">
+                <span className="h-2 w-2 animate-bounce rounded-full bg-mint/50 [animation-delay:-0.3s]" />
+                <span className="h-2 w-2 animate-bounce rounded-full bg-mint/50 [animation-delay:-0.15s]" />
+                <span className="h-2 w-2 animate-bounce rounded-full bg-mint/50" />
+              </div>
             </div>
           )}
         </div>
       </div>
 
+      {/* Input */}
       <form
         onSubmit={send}
         className="border-t border-line px-6 py-4 lg:px-8"
@@ -129,12 +164,12 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           isUser ? "bg-zinc-700 text-white" : "bg-mint/20 text-mint",
         )}
       >
-        {isUser ? "U" : "A"}
+        {isUser ? "U" : <Sparkles size={14} />}
       </div>
       <div className={cn("max-w-[80%] space-y-2", isUser && "items-end")}>
         <div
           className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm",
+            "rounded-2xl px-4 py-3 text-sm leading-relaxed",
             isUser
               ? "rounded-tr-sm bg-mint text-canvas"
               : "rounded-tl-sm border border-line bg-panel",
@@ -143,7 +178,10 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           {msg.text}
         </div>
         {msg.actions && msg.actions.length > 0 && (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+              {msg.actions.length} tool {msg.actions.length === 1 ? "call" : "calls"}
+            </p>
             {msg.actions.map((action, i) => (
               <ActionCard key={i} action={action} />
             ))}
@@ -156,35 +194,59 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 
 function ActionCard({ action }: { action: ActionTrace }) {
   const [expanded, setExpanded] = useState(false);
+  const hasError = !!action.error;
   return (
-    <button
-      onClick={() => setExpanded((v) => !v)}
-      className="w-full rounded-lg border border-line bg-white/[.02] px-3 py-2 text-left text-xs transition hover:bg-white/[.04]"
+    <div
+      className={cn(
+        "overflow-hidden rounded-lg border transition",
+        hasError ? "border-rose-500/20 bg-rose-500/[.03]" : "border-line bg-white/[.02]",
+      )}
     >
-      <div className="flex items-center gap-2">
-        <Wrench size={12} className={action.error ? "text-rose-400" : "text-mint"} />
-        <span className="font-mono font-medium">{action.tool}</span>
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs transition hover:bg-white/[.03]"
+      >
+        {hasError ? (
+          <XCircle size={14} className="shrink-0 text-rose-400" />
+        ) : (
+          <CheckCircle2 size={14} className="shrink-0 text-mint" />
+        )}
+        <Wrench size={12} className="shrink-0 text-zinc-600" />
+        <span className="font-mono font-medium text-zinc-300">{action.tool}</span>
         <span className="text-zinc-600">
-          {Object.keys(action.arguments).length} args
+          {Object.keys(action.arguments).length} {Object.keys(action.arguments).length === 1 ? "arg" : "args"}
         </span>
-      </div>
+        <ChevronDown
+          size={14}
+          className={cn("ml-auto shrink-0 text-zinc-600 transition-transform", expanded && "rotate-180")}
+        />
+      </button>
       {expanded && (
-        <div className="mt-2 space-y-1 font-mono text-[11px] text-zinc-500">
-          <pre className="overflow-x-auto rounded bg-black/30 p-2">
-            {JSON.stringify(action.arguments, null, 2)}
-          </pre>
-          {action.result && (
-            <pre className="overflow-x-auto rounded bg-black/30 p-2 text-mint/70">
-              {action.result.slice(0, 500)}
+        <div className="space-y-2 border-t border-line/50 px-3 py-2.5 font-mono text-[11px]">
+          <div>
+            <p className="mb-1 text-[10px] uppercase tracking-wide text-zinc-600">Arguments</p>
+            <pre className="overflow-x-auto rounded bg-black/30 p-2 text-zinc-400">
+              {JSON.stringify(action.arguments, null, 2)}
             </pre>
+          </div>
+          {action.result && (
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-zinc-600">Result</p>
+              <pre className="max-h-48 overflow-auto rounded bg-black/30 p-2 text-mint/70">
+                {action.result.slice(0, 800)}
+              </pre>
+            </div>
           )}
           {action.error && (
-            <pre className="overflow-x-auto rounded bg-black/30 p-2 text-rose-400">
-              {action.error}
-            </pre>
+            <div>
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-rose-400/70">Error</p>
+              <pre className="overflow-x-auto rounded bg-black/30 p-2 text-rose-400">
+                {action.error}
+              </pre>
+            </div>
           )}
         </div>
       )}
-    </button>
+    </div>
   );
 }

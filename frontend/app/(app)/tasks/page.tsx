@@ -4,22 +4,21 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/components/workspace-provider";
 import type { Task } from "@/lib/types";
-import { CheckSquare } from "lucide-react";
+import { CheckSquare, Clock, AlertCircle, CircleDot, CheckCircle2, AlertTriangle } from "lucide-react";
+import { PageHeader, EmptyState, Skeleton, Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-const stateColors: Record<string, string> = {
-  open: "bg-zinc-500/15 text-zinc-400",
-  in_progress: "bg-blue-500/15 text-blue-400",
-  blocked: "bg-rose-500/15 text-rose-400",
-  completed: "bg-mint/15 text-mint",
-  cancelled: "bg-zinc-500/15 text-zinc-600",
-  overdue: "bg-amber-500/15 text-amber-400",
-};
+const columns = [
+  { key: "open", label: "Open", icon: CircleDot, color: "zinc" as const },
+  { key: "in_progress", label: "In Progress", icon: Clock, color: "blue" as const },
+  { key: "blocked", label: "Blocked", icon: AlertCircle, color: "rose" as const },
+  { key: "overdue", label: "Overdue", icon: AlertTriangle, color: "amber" as const },
+  { key: "completed", label: "Completed", icon: CheckCircle2, color: "mint" as const },
+];
 
 export default function TasksPage() {
   const { workspace } = useWorkspace();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,71 +34,126 @@ export default function TasksPage() {
 
   if (!workspace) return null;
 
-  const filtered =
-    filter === "all" ? tasks : tasks.filter((t) => t.state === filter);
+  const tasksByState = (state: string) => tasks.filter((t) => t.state === state);
+  const otherTasks = tasks.filter((t) => !columns.some((c) => c.key === t.state));
 
   return (
     <div className="p-6 lg:p-8">
-      <div className="flex items-center gap-2">
-        <CheckSquare className="h-5 w-5 text-mint" />
-        <h1 className="text-2xl font-bold">Tasks</h1>
-      </div>
-      <p className="mt-1 text-sm text-zinc-500">
-        Work items tracked across your workspace.
-      </p>
+      <PageHeader
+        icon={CheckSquare}
+        title="Tasks"
+        subtitle="Work items tracked across your workspace"
+      />
 
-      <div className="mt-6 flex gap-2 overflow-x-auto">
-        {["all", "open", "in_progress", "blocked", "completed", "overdue"].map(
-          (s) => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={cn(
-                "whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition",
-                filter === s
-                  ? "bg-mint text-canvas"
-                  : "border border-line bg-panel text-zinc-400 hover:text-zinc-200",
-              )}
-            >
-              {s.replace("_", " ")}
-            </button>
-          ),
-        )}
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {loading ? (
-          <div className="skeleton h-16 rounded-lg bg-white/5" />
-        ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-line bg-panel p-8 text-center">
-            <p className="text-sm text-zinc-600">No tasks</p>
-          </div>
-        ) : (
-          filtered.map((t) => (
+      {/* Summary bar */}
+      <div className="mt-6 flex flex-wrap gap-3">
+        {columns.map((col) => {
+          const count = tasksByState(col.key).length;
+          return (
             <div
-              key={t.id}
-              className="flex items-center justify-between rounded-lg border border-line bg-panel px-4 py-3"
+              key={col.key}
+              className="flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2"
             >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{t.title}</p>
-                {t.due_at && (
-                  <p className="mt-0.5 text-xs text-zinc-600">
-                    Due {new Date(t.due_at).toLocaleDateString()}
-                  </p>
+              <col.icon size={16} className={cn(
+                col.color === "mint" && "text-mint",
+                col.color === "blue" && "text-blue-400",
+                col.color === "rose" && "text-rose-400",
+                col.color === "amber" && "text-amber-400",
+                col.color === "zinc" && "text-zinc-400",
+              )} />
+              <span className="text-sm text-zinc-400">{col.label}</span>
+              <span className="text-sm font-bold">{count}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Kanban board */}
+      {loading ? (
+        <div className="mt-6 grid gap-4 lg:grid-cols-5">
+          {columns.map((c) => (
+            <Skeleton key={c.key} className="h-48" />
+          ))}
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="mt-6">
+          <EmptyState
+            icon={CheckSquare}
+            title="No tasks yet"
+            description="Tasks appear here once the agent creates them from conversations, meetings, or project kickoffs."
+          />
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-4 lg:grid-cols-5">
+          {columns.map((col) => {
+            const colTasks = tasksByState(col.key);
+            return (
+              <div key={col.key} className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <col.icon size={15} className={cn(
+                    col.color === "mint" && "text-mint",
+                    col.color === "blue" && "text-blue-400",
+                    col.color === "rose" && "text-rose-400",
+                    col.color === "amber" && "text-amber-400",
+                    col.color === "zinc" && "text-zinc-400",
+                  )} />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    {col.label}
+                  </span>
+                  <span className="ml-auto rounded-md bg-white/5 px-1.5 py-0.5 text-xs text-zinc-500">
+                    {colTasks.length}
+                  </span>
+                </div>
+                {colTasks.map((t) => (
+                  <TaskCard key={t.id} task={t} />
+                ))}
+                {colTasks.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-line/50 py-8 text-center">
+                    <p className="text-xs text-zinc-700">Empty</p>
+                  </div>
                 )}
               </div>
-              <span
-                className={cn(
-                  "ml-3 shrink-0 rounded-md px-2 py-0.5 text-xs font-medium",
-                  stateColors[t.state] ?? "bg-zinc-500/15 text-zinc-400",
-                )}
-              >
-                {t.state.replace("_", " ")}
-              </span>
-            </div>
-          ))
+            );
+          })}
+        </div>
+      )}
+
+      {/* Other states */}
+      {otherTasks.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Other</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {otherTasks.map((t) => (
+              <TaskCard key={t.id} task={t} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaskCard({ task }: { task: Task }) {
+  const isOverdue = task.state === "overdue" || (task.due_at && new Date(task.due_at) < new Date() && task.state !== "completed");
+  return (
+    <Card hover className="p-4">
+      <p className="text-sm font-medium leading-snug">{task.title}</p>
+      <div className="mt-3 flex items-center justify-between">
+        {task.due_at ? (
+          <span className={cn(
+            "flex items-center gap-1 text-xs",
+            isOverdue ? "text-amber-400" : "text-zinc-600",
+          )}>
+            <Clock size={12} />
+            {new Date(task.due_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          </span>
+        ) : (
+          <span className="text-xs text-zinc-700">No due date</span>
+        )}
+        {task.priority > 0 && (
+          <span className="text-xs text-zinc-600">P{task.priority}</span>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
