@@ -3,7 +3,7 @@ FROM node:22-slim AS frontend
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev || npm install
+RUN npm ci || npm install
 
 COPY . .
 
