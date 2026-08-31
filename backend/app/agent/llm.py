@@ -1,6 +1,9 @@
-"""LLM client for the agent. Cerebras is the default brain (fast inference,
-OpenAI-compatible API). Falls back to OpenAI if configured. Both expose the
-chat.completions.create tool-calling interface the agent loop relies on.
+"""LLM client for the agent.
+
+**Gemini 3.5 Flash** (via the Google GenAI SDK) is the default brain — it is
+optimized for agentic execution, tool calling, and long-horizon tasks.
+Cerebras and OpenAI are available as fallback providers; all expose the same
+``chat()`` / ``complete()`` interface the agent loop relies on.
 """
 from __future__ import annotations
 
@@ -21,7 +24,14 @@ class LLMError(RuntimeError):
 class LLMClient:
     def __init__(self) -> None:
         provider = settings.ai_provider.lower()
-        if provider == "cerebras":
+        if provider == "gemini":
+            # Delegate to the Gemini client which uses google-genai SDK.
+            from .gemini_llm import GeminiLLMClient, LLMError as GeminiLLMError
+
+            self._gemini = GeminiLLMClient()
+            self.model = self._gemini.model
+            self._provider = "gemini"
+        elif provider == "cerebras":
             if not settings.cerebras_api_key:
                 raise LLMError("CEREBRAS_API_KEY is not set")
             self._client = AsyncOpenAI(
@@ -30,11 +40,13 @@ class LLMClient:
                 timeout=60.0,
             )
             self.model = settings.cerebras_model
+            self._provider = "openai_compat"
         elif provider == "openai":
             if not settings.openai_api_key:
                 raise LLMError("OPENAI_API_KEY is not set")
             self._client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=60.0)
             self.model = "gpt-4o-mini"
+            self._provider = "openai_compat"
         else:
             raise LLMError(f"unknown AI_PROVIDER: {provider}")
 
@@ -46,9 +58,18 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> dict:
-        """Run one chat.completions turn. Returns the raw choice message dict
+        """Run one chat turn. Returns the raw choice message dict
         (role, content, tool_calls). Retries with backoff on transient errors.
         """
+        # Gemini has its own client with the same interface.
+        if self._provider == "gemini":
+            return await self._gemini.chat(
+                messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
         kwargs: dict = {
             "model": self.model,
             "messages": messages,
