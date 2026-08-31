@@ -1,4 +1,7 @@
-"""Email service. Uses SMTP if configured; otherwise logs (dev mode)."""
+"""Email service. Uses SMTP if configured and email_enabled is True;
+otherwise logs (dev mode). Email sending is disabled by default — set
+EMAIL_ENABLED=true in .env to re-enable.
+"""
 import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -10,6 +13,9 @@ log = logging.getLogger(__name__)
 
 
 def _send(to: str, subject: str, body: str) -> None:
+    if not settings.email_enabled:
+        log.info("[email disabled] to=%s subject=%s", to, subject)
+        return
     if not settings.smtp_host:
         log.info("[dev email] to=%s subject=%s body=%s", to, subject, body[:200])
         return

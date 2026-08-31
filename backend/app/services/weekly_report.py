@@ -146,7 +146,7 @@ def _build_briefing(shipped, slipped, blocked, overdue, needs_attention) -> str:
 
 async def _email_founder(session: AsyncSession, workspace_id, data: dict) -> None:
     from ..config import settings
-    if not settings.smtp_host:
+    if not settings.email_enabled or not settings.smtp_host:
         return
     # Find the workspace owner
     owner = await session.scalar(

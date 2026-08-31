@@ -118,11 +118,47 @@ class CerebrasExtractionProvider(MeetingExtractionProvider):
 
 
 def configured_provider() -> MeetingExtractionProvider:
+    if settings.ai_provider == "gemini":
+        return GeminiExtractionProvider()
     if settings.ai_provider == "cerebras":
         return CerebrasExtractionProvider()
     if settings.ai_provider == "openai":
         return OpenAIExtractionProvider()
     raise ExtractionError(f"Unsupported extraction provider: {settings.ai_provider}")
+
+
+class GeminiExtractionProvider(MeetingExtractionProvider):
+    """Uses Google Gemini (via Vertex AI or Gemini API) for structured meeting
+    extraction."""
+    async def extract(self, chunks: list[ChunkInput]) -> MeetingExtractionResult:
+        from google import genai
+        from google.genai import types as gtypes
+
+        client = genai.Client(
+            vertexai=settings.use_vertex_ai,
+            project=settings.google_cloud_project if settings.use_vertex_ai else None,
+            location=settings.google_cloud_location if settings.use_vertex_ai else None,
+        )
+
+        schema = _strict_schema(MeetingExtractionResult.model_json_schema())
+        config = gtypes.GenerateContentConfig(
+            temperature=0.1,
+            response_mime_type="application/json",
+            response_schema=schema,
+        )
+
+        response = await client.aio.models.generate_content(
+            model=settings.gemini_model,
+            contents=f"{SYSTEM_PROMPT}\n\n{transcript_prompt(chunks)}",
+            config=config,
+        )
+        text = response.text or ""
+        if not text:
+            raise ExtractionError("Gemini returned empty response")
+        try:
+            return MeetingExtractionResult.model_validate_json(text)
+        except (ValueError, json.JSONDecodeError) as error:
+            raise ExtractionError(f"Gemini returned malformed JSON: {text[:200]}") from error
 
 
 async def extract_with_retry(
@@ -179,7 +215,11 @@ async def run_extraction(session: AsyncSession, transcript_id: str) -> MeetingEx
         extraction = MeetingExtraction(
             transcript_id=transcript.id,
             provider=settings.ai_provider,
-            model=settings.cerebras_model if settings.ai_provider == "cerebras" else "gpt-4o-mini",
+            model=(
+                settings.gemini_model if settings.ai_provider == "gemini"
+                else settings.cerebras_model if settings.ai_provider == "cerebras"
+                else "gpt-4o-mini"
+            ),
         )
         session.add(extraction)
     extraction.status = "processing"
