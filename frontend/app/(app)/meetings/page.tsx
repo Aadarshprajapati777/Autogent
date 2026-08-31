@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useWorkspace } from "@/components/workspace-provider";
-import { CalendarDays, Plus } from "lucide-react";
+import { CalendarDays, Plus, Video, Clock, CheckCircle2, XCircle, Radio } from "lucide-react";
+import { PageHeader, EmptyState, Skeleton, Badge, Card } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 interface Meeting {
   id: string;
@@ -13,6 +15,13 @@ interface Meeting {
   status: string;
   scheduled_at: string | null;
 }
+
+const statusConfig: Record<string, { icon: typeof Radio; color: "zinc" | "mint" | "blue" | "rose"; label: string }> = {
+  scheduled: { icon: Clock, color: "zinc", label: "Scheduled" },
+  live: { icon: Radio, color: "mint", label: "Live" },
+  completed: { icon: CheckCircle2, color: "blue", label: "Completed" },
+  failed: { icon: XCircle, color: "rose", label: "Failed" },
+};
 
 export default function MeetingsPage() {
   const { workspace } = useWorkspace();
@@ -64,28 +73,21 @@ export default function MeetingsPage() {
     }
   };
 
-  const statusColors: Record<string, string> = {
-    scheduled: "bg-zinc-500/15 text-zinc-400",
-    live: "bg-mint/15 text-mint",
-    completed: "bg-blue-500/15 text-blue-400",
-    failed: "bg-rose-500/15 text-rose-400",
-  };
-
   return (
     <div className="p-6 lg:p-8">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-mint" />
-          <h1 className="text-2xl font-bold">Meetings</h1>
-        </div>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-2 rounded-lg bg-mint px-4 py-2 text-sm font-medium text-canvas transition hover:brightness-110"
-        >
-          <Plus size={16} />
-          New meeting
-        </button>
-      </div>
+      <PageHeader
+        icon={CalendarDays}
+        title="Meetings"
+        subtitle="Send the Recall.ai bot to transcribe and extract action items"
+        action={
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-2 rounded-lg bg-mint px-4 py-2 text-sm font-medium text-canvas transition hover:brightness-110"
+          >
+            <Plus size={16} /> New meeting
+          </button>
+        }
+      />
 
       {showForm && (
         <form
@@ -121,39 +123,71 @@ export default function MeetingsPage() {
         </form>
       )}
 
-      <div className="mt-6 space-y-2">
-        {loading ? (
-          <div className="skeleton h-16 rounded-lg bg-white/5" />
-        ) : meetings.length === 0 ? (
-          <div className="rounded-xl border border-line bg-panel p-8 text-center">
-            <p className="text-sm text-zinc-600">No meetings yet</p>
-          </div>
-        ) : (
-          meetings.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center justify-between rounded-lg border border-line bg-panel px-4 py-3"
-            >
-              <div>
-                <p className="text-sm font-medium">{m.title || "Untitled meeting"}</p>
+      {loading ? (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-36" />
+          ))}
+        </div>
+      ) : meetings.length === 0 ? (
+        <div className="mt-6">
+          <EmptyState
+            icon={Video}
+            title="No meetings yet"
+            description="Add a meeting URL and the Recall.ai bot will join, transcribe, and extract action items automatically."
+          />
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {meetings.map((m) => {
+            const cfg = statusConfig[m.status] ?? statusConfig.scheduled;
+            return (
+              <Link key={m.id} href={`/meetings/${m.id}`}>
+              <Card key={m.id} hover>
+                {/* Status icon */}
+                <div className="flex items-center justify-between">
+                  <div className={cn(
+                    "grid h-10 w-10 place-items-center rounded-xl",
+                    cfg.color === "mint" && "bg-mint/10",
+                    cfg.color === "blue" && "bg-blue-500/10",
+                    cfg.color === "rose" && "bg-rose-500/10",
+                    cfg.color === "zinc" && "bg-white/5",
+                  )}>
+                    <cfg.icon size={18} className={cn(
+                      cfg.color === "mint" && "text-mint",
+                      cfg.color === "blue" && "text-blue-400",
+                      cfg.color === "rose" && "text-rose-400",
+                      cfg.color === "zinc" && "text-zinc-400",
+                      m.status === "live" && "animate-pulse",
+                    )} />
+                  </div>
+                  <Badge color={cfg.color}>{cfg.label}</Badge>
+                </div>
+
+                <p className="mt-3 font-medium leading-snug">{m.title || "Untitled meeting"}</p>
+
                 {m.scheduled_at && (
-                  <p className="mt-0.5 text-xs text-zinc-600">
-                    {new Date(m.scheduled_at).toLocaleString()}
-                  </p>
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-zinc-600">
+                    <CalendarDays size={12} />
+                    {new Date(m.scheduled_at).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </div>
                 )}
-              </div>
-              <span
-                className={cn(
-                  "rounded-md px-2 py-0.5 text-xs font-medium",
-                  statusColors[m.status] ?? "bg-zinc-500/15 text-zinc-400",
-                )}
-              >
-                {m.status}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
+
+                <div className="mt-3 border-t border-line pt-3">
+                  <span className="text-xs text-zinc-600">Provider: </span>
+                  <span className="text-xs font-medium text-zinc-400">{m.provider}</span>
+                </div>
+              </Card>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
