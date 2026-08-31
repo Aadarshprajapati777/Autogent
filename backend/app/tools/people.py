@@ -132,6 +132,14 @@ async def people_get(ctx, args: dict) -> dict:
         "interests": person.interests,
         "career_goals": person.career_goals,
         "resume_summary": person.resume_summary,
+        "email": person.email,
+        "slack_id": person.slack_id,
+        "slack_handle": person.slack_handle,
+        "github_login": person.github_login,
+        "jira_account_id": person.jira_account_id,
+        "jira_display_name": person.jira_display_name,
+        "linear_id": person.linear_id,
+        "avatar_url": person.avatar_url,
         "reliability": {
             "score": reliability,
             "commitments": len(commitments),
@@ -169,6 +177,15 @@ async def people_list(ctx, args: dict) -> dict:
                 "role": p.role.value,
                 "title": p.title,
                 "skills_count": len(p.skills),
+                "email": p.email,
+                "slack_handle": p.slack_handle,
+                "github_login": p.github_login,
+                "jira_account_id": p.jira_account_id,
+                "linear_id": p.linear_id,
+                "integrations_linked": sum([
+                    bool(p.slack_id), bool(p.github_login),
+                    bool(p.jira_account_id), bool(p.linear_id),
+                ]),
             }
             for p in people
         ],

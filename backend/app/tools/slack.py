@@ -57,7 +57,7 @@ async def slack_send_message(ctx, args: dict) -> dict:
 
 @tool(
     name="slack_list_channels",
-    description="List public channels in the connected Slack workspace.",
+    description="List public channels in the connected Slack workspace, showing which ones the bot has joined.",
     parameters={"type": "object", "properties": {}},
 )
 async def slack_list_channels(ctx, args: dict) -> dict:
@@ -68,10 +68,45 @@ async def slack_list_channels(ctx, args: dict) -> dict:
     if not result.get("ok"):
         return {"error": result.get("error", "slack error")}
     channels = [
-        {"id": c["id"], "name": c["name"], "num_members": c.get("num_members", 0)}
+        {
+            "id": c["id"],
+            "name": c["name"],
+            "num_members": c.get("num_members", 0),
+            "bot_joined": c.get("is_member", False),
+        }
         for c in result.get("channels", [])
     ]
     return {"count": len(channels), "channels": channels}
+
+
+@tool(
+    name="slack_join_channel",
+    description="Join a Slack channel so the bot can read messages and participate. Use this before reading messages from a channel the bot hasn't joined.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "channel": {"type": "string", "description": "Channel ID or name (e.g. 'general' or 'C01234')"},
+        },
+        "required": ["channel"],
+    },
+)
+async def slack_join_channel(ctx, args: dict) -> dict:
+    token = await _resolve_token(ctx)
+    if not token:
+        return {"error": "Slack is not connected for this workspace"}
+    channel = args["channel"]
+    # If a name was given, resolve to an ID.
+    if not channel.startswith("C"):
+        listing = await _slack_call(token, "conversations.list", types="public_channel", limit=200)
+        if listing.get("ok"):
+            for c in listing.get("channels", []):
+                if c["name"] == channel.lstrip("#"):
+                    channel = c["id"]
+                    break
+    result = await _slack_call(token, "conversations.join", channel=channel)
+    if not result.get("ok"):
+        return {"error": result.get("error", "slack error")}
+    return {"joined": True, "channel": channel, "name": result.get("channel", {}).get("name")}
 
 
 @tool(
@@ -126,7 +161,10 @@ async def slack_check_in(ctx, args: dict) -> dict:
 
 @tool(
     name="slack_recent_messages",
-    description="Read recent messages from a Slack channel (useful for catching up).",
+    description=(
+        "Read recent messages from a Slack channel. The bot will automatically "
+        "join the channel if it hasn't already. Use channel ID or name (e.g. 'general')."
+    ),
     parameters={
         "type": "object",
         "properties": {
@@ -149,6 +187,14 @@ async def slack_recent_messages(ctx, args: dict) -> dict:
                 if c["name"] == channel.lstrip("#"):
                     channel = c["id"]
                     break
+
+    # Auto-join the channel if not already a member — Slack requires
+    # the bot to be in the channel to read conversations.history.
+    join = await _slack_call(token, "conversations.join", channel=channel)
+    if not join.get("ok"):
+        # If join fails (e.g. private channel), surface the error
+        return {"error": f"Cannot join channel: {join.get('error', 'unknown')}. Ask a member to invite the bot with /invite @Autogent"}
+
     history = await _slack_call(token, "conversations.history", channel=channel, limit=args.get("limit", 20))
     if not history.get("ok"):
         return {"error": history.get("error", "slack error")}

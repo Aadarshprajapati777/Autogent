@@ -85,13 +85,20 @@ async def github_recent_activity(ctx, args: dict) -> dict:
 
 @tool(
     name="github_create_issue",
-    description="Open an issue in a repository.",
+    description=(
+        "Open an issue in a repository. Optionally assign it to a person "
+        "by name — the tool looks up their GitHub login from the people database."
+    ),
     parameters={
         "type": "object",
         "properties": {
-            "repo": {"type": "string"},
+            "repo": {"type": "string", "description": "full name, e.g. 'owner/repo'"},
             "title": {"type": "string"},
             "body": {"type": "string"},
+            "assignee_name": {
+                "type": "string",
+                "description": "Name of the person to assign (must be synced from GitHub)",
+            },
         },
         "required": ["repo", "title"],
     },
@@ -100,10 +107,32 @@ async def github_create_issue(ctx, args: dict) -> dict:
     token = await _resolve_token(ctx)
     if not token:
         return {"error": "GitHub is not connected for this workspace"}
+
+    # If assignee_name is given, look up their GitHub login
+    assignee_login = None
+    if args.get("assignee_name"):
+        from sqlalchemy import func, select
+        from ..models.memory import Person
+        person = await ctx.db.scalar(
+            select(Person).where(
+                Person.workspace_id == ctx.workspace_id,
+                func.lower(Person.name) == args["assignee_name"].lower(),
+            )
+        )
+        if not person:
+            return {"error": f"Person '{args['assignee_name']}' not found. Use people_list to see available people."}
+        if not person.github_login:
+            return {"error": f"'{person.name}' is not linked to a GitHub account. Sync GitHub members first."}
+        assignee_login = person.github_login
+
+    payload = {"title": args["title"], "body": args.get("body", "")}
+    if assignee_login:
+        payload["assignees"] = [assignee_login]
+
     result = await _gh(
         token, "POST", f"/repos/{args['repo']}/issues",
-        json={"title": args["title"], "body": args.get("body", "")},
+        json=payload,
     )
     if isinstance(result, dict) and result.get("error"):
         return result
-    return {"created": True, "number": result.get("number"), "url": result.get("html_url")}
+    return {"created": True, "number": result.get("number"), "url": result.get("html_url"), "assigned_to": args.get("assignee_name")}
