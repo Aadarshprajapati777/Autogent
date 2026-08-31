@@ -93,6 +93,26 @@ class LLMClient:
                     await asyncio.sleep(2 ** attempt)
         raise LLMError(f"LLM call failed after retries: {last_error}") from last_error
 
+    async def complete(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> str:
+        """Run a single-prompt completion (no tools, no conversation history).
+        Used by the PM intelligence services (extraction, onboarding, check-in,
+        state inference) that need structured JSON output from a single prompt.
+        Returns the raw content string.
+        """
+        messages = [{"role": "user", "content": prompt}]
+        result = await self.chat(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return (result.get("content") or "").strip()
+
 
 _client: LLMClient | None = None
 

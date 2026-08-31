@@ -8,7 +8,7 @@ so the agent can build rich profiles and project health views via tools.
 """
 import enum, uuid
 from datetime import datetime
-from sqlalchemy import Enum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Enum, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import Mapped, mapped_column
@@ -157,6 +157,12 @@ class Person(UUIDPrimaryKey, Timestamped, Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
+    onboarding_step: Mapped[str | None] = mapped_column(
+        String(40), nullable=True
+    )
+    onboarding_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     __table_args__ = (
         UniqueConstraint("workspace_id", "name"),
         Index("ix_memory_people_role", "workspace_id", "role"),
@@ -238,4 +244,61 @@ class IngestEpisode(UUIDPrimaryKey, Timestamped, Base):
     fact_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     __table_args__ = (
         UniqueConstraint("workspace_id", "episode_id"),
+    )
+
+
+class FactRelation(UUIDPrimaryKey, Timestamped, Base):
+    """A directed edge between two facts: causes, influences, blocks, depends_on.
+    Replaces the graph edges kgmemory used — stored as a simple join table.
+    """
+    __tablename__ = "memory_fact_relations"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    from_fact_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    to_fact_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "from_fact_id", "to_fact_id", "relation_type"),
+    )
+
+
+class StateSnapshot(UUIDPrimaryKey, Timestamped, Base):
+    """A point-in-time inference of project health or person credibility.
+    The state inference service writes these after each ingest cycle so the
+    PM always has a current view of reality without re-deriving from scratch.
+    """
+    __tablename__ = "memory_state_snapshots"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    state: Mapped[str] = mapped_column(String(40), nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    risk_signals: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
+    open_commitments: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completed_since_last: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    missed_or_late: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    days_since_last_seen: Mapped[int | None] = mapped_column(Integer)
+    __table_args__ = (
+        Index("ix_state_snapshots_entity", "workspace_id", "entity_type", "entity_name"),
+    )
+
+
+class CheckInRecord(UUIDPrimaryKey, Timestamped, Base):
+    """Records each check-in message the PM sends so it doesn't repeat the
+    same question. Expires after 14 days so old check-ins don't clutter.
+    """
+    __tablename__ = "memory_checkin_records"
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    person_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    thread_ts: Mapped[str | None] = mapped_column(String(64))
+    __table_args__ = (
+        Index("ix_checkin_person", "workspace_id", "person_name"),
     )

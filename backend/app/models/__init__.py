@@ -18,8 +18,10 @@ from .integrations import (
     OAuthState,
 )
 from .memory import (
+    CheckInRecord,
     Fact,
     FactKind,
+    FactRelation,
     IngestEpisode,
     MemoryTask,
     MemoryTaskStatus,
@@ -28,6 +30,7 @@ from .memory import (
     Project,
     ProjectStatus,
     SpeakerRole,
+    StateSnapshot,
     TemporalStatus,
 )
 from .meetings import (
@@ -69,6 +72,7 @@ __all__ = [
     "AuditLog",
     "CalendarEvent",
     "CandidateState",
+    "CheckInRecord",
     "Decision",
     "DeliveryStatus",
     "Escalation",
@@ -77,6 +81,7 @@ __all__ = [
     "ExternalTaskMapping",
     "Fact",
     "FactKind",
+    "FactRelation",
     "GithubActivity",
     "GithubRepo",
     "IngestEpisode",
@@ -106,6 +111,7 @@ __all__ = [
     "Reminder",
     "Speaker",
     "SpeakerRole",
+    "StateSnapshot",
     "Task",
     "TaskActivityMatch",
     "TaskCandidate",

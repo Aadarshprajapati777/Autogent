@@ -1,12 +1,13 @@
 """Agent scheduler — runs the agent proactively on a schedule. Every cycle
-it scans workspaces with Slack connected and asks the agent to check in
-with team members and follow up on stale tasks. This is what makes Autogent
-autonomous: it acts without a user prompt.
+it scans workspaces with Slack connected and runs the autonomous PM jobs:
+auto-onboarding, proactive check-ins, and project kickoff. This is what
+makes Autogent autonomous: it acts without a user prompt.
 
 The scheduler also runs:
   - Task scoring (rescore all tasks weekly)
   - Escalation evaluation (fire rules for overdue/blocked tasks)
   - Weekly report generation (on the first cycle of each week)
+  - State inference (derive project/person state from recent facts)
 """
 from __future__ import annotations
 
@@ -62,7 +63,7 @@ async def _run_loop() -> None:
 
 
 async def _run_once() -> None:
-    # 1. Run agent check-in cycles for workspaces with Slack connected
+    # Find workspaces with Slack connected
     async with SessionLocal() as session:
         rows = (
             await session.execute(
@@ -72,34 +73,66 @@ async def _run_once() -> None:
                 )
             )
         ).scalars().all()
+        slack_workspaces = [r.workspace_id for r in rows]
 
-    for integration in rows:
-        workspace_id = integration.workspace_id
+    # 1. Auto-onboard new workspace members (PM automation)
+    for workspace_id in slack_workspaces:
         try:
             async with SessionLocal() as session:
-                ctx = ToolContext(db=session, workspace_id=workspace_id)
-                await agent.run(
-                    [
-                        {
-                            "role": "user",
-                            "content": (
-                                "Daily check-in cycle: review open tasks and "
-                                "stale commitments in memory, then check in on Slack "
-                                "with anyone who has overdue or blocked work. Ask "
-                                "for: 1) status on current task, 2) any blockers, "
-                                "3) ETA for completion. Keep messages short and "
-                                "friendly. Don't ping anyone you already checked in "
-                                "with today."
-                            ),
-                        }
-                    ],
-                    ctx,
-                )
+                from .pm_automation import auto_onboard_new_members
+                results = await auto_onboard_new_members(session, workspace_id)
+                await session.commit()
+                onboarded = [r for r in results if r.get("action") == "onboarding_started"]
+                if onboarded:
+                    logger.info("Auto-onboarded %d members in workspace %s",
+                                len(onboarded), workspace_id)
+        except Exception as exc:
+            logger.warning("Auto-onboarding failed for %s: %s", workspace_id, exc)
+
+    # 2. Proactive check-ins (rate-limited, cooldown-aware)
+    for workspace_id in slack_workspaces:
+        try:
+            async with SessionLocal() as session:
+                from .pm_automation import auto_check_in
+                results = await auto_check_in(session, workspace_id)
+                await session.commit()
+                checked_in = [r for r in results if r.get("needed") and not r.get("skipped")]
+                if checked_in:
+                    logger.info("Checked in with %d people in workspace %s",
+                                len(checked_in), workspace_id)
+        except Exception as exc:
+            logger.warning("Auto check-in failed for %s: %s", workspace_id, exc)
+
+    # 3. Project kickoff — auto-assign unassigned tasks and DM engineers
+    for workspace_id in slack_workspaces:
+        try:
+            async with SessionLocal() as session:
+                from sqlalchemy import func as sql_func
+                from ..models.memory import Project
+                projects = (await session.scalars(
+                    select(Project).where(Project.workspace_id == workspace_id)
+                )).all()
+                from .pm_automation import kickoff_project
+                for project in projects:
+                    result = await kickoff_project(session, workspace_id, project.name)
+                    if result.get("assigned", 0) > 0:
+                        logger.info("Kicked off project %s: %d tasks assigned",
+                                    project.name, result["assigned"])
                 await session.commit()
         except Exception as exc:
-            logger.warning("Agent scheduler failed for %s: %s", workspace_id, exc)
+            logger.warning("Project kickoff failed for %s: %s", workspace_id, exc)
 
-    # 2. Rescore tasks for all workspaces
+    # 4. State inference — derive project/person state from recent facts
+    for workspace_id in slack_workspaces:
+        try:
+            async with SessionLocal() as session:
+                from .state_inference import infer_and_snapshot_state
+                await infer_and_snapshot_state(session, workspace_id)
+                await session.commit()
+        except Exception as exc:
+            logger.warning("State inference failed for %s: %s", workspace_id, exc)
+
+    # 5. Rescore tasks for all workspaces
     try:
         from ..services.task_scoring import rescore_workspace_tasks
         async with SessionLocal() as session:
@@ -115,14 +148,14 @@ async def _run_once() -> None:
     except Exception as exc:
         logger.warning("Task scoring cycle failed: %s", exc)
 
-    # 3. Run escalation evaluation
+    # 6. Run escalation evaluation
     try:
         from ..services.escalation_engine import run_escalation_cycle
         await run_escalation_cycle()
     except Exception as exc:
         logger.warning("Escalation cycle failed: %s", exc)
 
-    # 4. Generate weekly reports (check if it's a new week)
+    # 7. Generate weekly reports (check if it's a new week)
     try:
         from ..services.weekly_report import generate_weekly_report
         async with SessionLocal() as session:
