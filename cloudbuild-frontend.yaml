@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg
+      - NEXT_PUBLIC_API_URL=https://autogent-backend-802301600867.us-central1.run.app/api/v1
+      - -t
+      - us-central1-docker.pkg.dev/autoagent-closeloop/autogent/autogent-frontend:latest
+      - .
+images:
+  - us-central1-docker.pkg.dev/autoagent-closeloop/autogent/autogent-frontend:latest
