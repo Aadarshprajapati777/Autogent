@@ -21,6 +21,7 @@ from .api.middleware import (
     configure_logging,
 )
 from .api.v1.agent import router as agent_router
+from .api.v1.analytics import router as analytics_router
 from .api.v1.approvals import router as approval_router
 from .api.v1.auth import router as auth_router
 from .api.v1.github_webhooks import router as github_webhooks_router
@@ -28,7 +29,6 @@ from .api.v1.integrations import router as integration_router
 from .api.v1.meetings import router as meeting_router
 from .api.v1.members import router as members_router
 from .api.v1.memory import router as memory_router
-from .api.v1.payments import router as payments_router
 from .api.v1.pm import router as pm_router
 from .api.v1.pm_advanced import router as pm_advanced_router
 from .api.v1.recall_webhooks import router as recall_webhooks_router
@@ -165,10 +165,10 @@ app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(approval_router, prefix="/api/v1")
 app.include_router(meeting_router, prefix="/api/v1")
 app.include_router(members_router, prefix="/api/v1")
-app.include_router(payments_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(github_webhooks_router, prefix="/api/v1")
 app.include_router(recall_webhooks_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
 app.include_router(pm_router, prefix="/api/v1")
 app.include_router(pm_advanced_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")

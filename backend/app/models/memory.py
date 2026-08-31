@@ -154,6 +154,17 @@ class Person(UUIDPrimaryKey, Timestamped, Base):
     interests: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     career_goals: Mapped[str | None] = mapped_column(Text)
     resume_summary: Mapped[str | None] = mapped_column(Text)
+    # Integration-linked fields — a single Person can be matched across
+    # Slack, GitHub, Jira, and meetings via email (primary) or name.
+    email: Mapped[str | None] = mapped_column(String(300), index=True)
+    slack_id: Mapped[str | None] = mapped_column(String(50), index=True)
+    slack_handle: Mapped[str | None] = mapped_column(String(100))
+    github_login: Mapped[str | None] = mapped_column(String(100))
+    github_id: Mapped[str | None] = mapped_column(String(50))
+    jira_account_id: Mapped[str | None] = mapped_column(String(100))
+    jira_display_name: Mapped[str | None] = mapped_column(String(200))
+    linear_id: Mapped[str | None] = mapped_column(String(50))
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )

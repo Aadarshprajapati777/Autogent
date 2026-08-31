@@ -31,10 +31,23 @@ class Settings(BaseSettings):
     credential_encryption_key: str = ""
 
     # ── LLM ──
-    ai_provider: str = "cerebras"
+    # Supported providers: gemini (default), cerebras, openai
+    ai_provider: str = "gemini"
     cerebras_api_key: str = ""
     cerebras_model: str = "gpt-oss-120b"
     openai_api_key: str = ""
+
+    # ── Google Gemini / Vertex AI ──
+    # For Gemini Developer API: set GEMINI_API_KEY
+    # For Vertex AI / Agent Platform: set USE_VERTEX_AI=true, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash"
+    use_vertex_ai: bool = False
+    google_cloud_project: str = ""
+    google_cloud_location: str = "global"
+    # Use Google ADK as the agent framework for the chat agent
+    use_adk_agent: bool = True
+
     agent_max_steps: int = 8
     agent_model_temperature: float = 0.2
 
@@ -63,6 +76,9 @@ class Settings(BaseSettings):
     recall_svix_webhook_secret: str = ""
 
     # ── email ──
+    # Email sending is disabled by default. Set EMAIL_ENABLED=true to enable.
+    # SMTP settings below are kept for future use when email is re-enabled.
+    email_enabled: bool = False
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""
