@@ -249,7 +249,7 @@ async def analytics_bottlenecks(ctx, args: dict) -> dict:
             {
                 "title": t.title,
                 "due_at": t.due_at.isoformat() if t.due_at else None,
-                "days_overdue": (now - t.due_at).days if t.due_at else 0,
+                "days_overdue": (now - (t.due_at.replace(tzinfo=UTC) if t.due_at.tzinfo is None else t.due_at)).days if t.due_at else 0,
             }
             for t in overdue
         ],
