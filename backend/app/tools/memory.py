@@ -217,7 +217,7 @@ async def memory_search_facts(ctx, args: dict) -> dict:
     scored: list[tuple[float, Fact]] = []
     for fid, fact in candidates.items():
         vec_score = vector_results.get(fid, 0.0)
-        kw_score = 1.0 if any(
+        kw_score = 1.0 if (
             query_text.lower() in (fact.subject or "").lower()
             or query_text.lower() in (fact.predicate or "").lower()
             or query_text.lower() in (fact.value or "").lower()
